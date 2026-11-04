@@ -123,6 +123,8 @@ Only routes the heuristics cannot classify with confidence reach the user; every
 | `indexing` | No | `index`, `noindex` | Search engine indexing intent (SEO), independent of protection |
 | `rateLimit` | No | `windowMs`, `max` | Rate limiting intent |
 | `enforcement.via` | No | `app-middleware`, `api-gateway`, `waf`, `ip-allowlist`, `mtls`, `other`, `none` | How this intent is upheld. For the record only; it is not verified |
+| `gate` | No | `type`: `passphrase`, `sso`, `mfa`, `basic-auth`, `other`; `minLength` (integer, 8 or more) | The extra access step required for the route, such as an admin page. Only the type and minimum length are recorded; the secret is never stored |
+| `linkable` | No | `true` | Explicitly allows links to this route from elsewhere. Absent means admin, gated and internal routes must not be linked |
 | `reason` | No | `source`: `heuristic`, `user`, `agent`; `rule` | Basis of the classification, so a reviewer knows which decisions to trust |
 | `notes` | No | String | Free-form note left by a person |
 
@@ -156,6 +158,7 @@ The must-have features of v1 (P0) are detection, classification suggestions, que
 | FR-2.3 | When unsure, suggest the non-public side. | P0 |
 | FR-2.4 | Suggest `cache` and `indexing` only when there is a signal; otherwise leave them empty. | P0 |
 | FR-2.5 | Adjust confidence using authentication signals in the source (session checks, middleware decorators). | P2 |
+| FR-2.7 | Every `analyze` result includes `guidance`: framework-specific implementation steps for the suggested exposure (public: caching, metadata, sitemap for SEO; secured: auth check, `no-store`, `noindex`, rate limiting; internal: network restriction). Text only; the tool never edits route source. | P0 |
 | FR-2.6 | `adminPaths` in `.security-sidecar.config.json` lists route prefixes (`*` matches within one segment) that are treated like `/admin`: suggested as `authenticated`, `no-store`, `noindex` with `high` confidence, so renamed admin paths do not prompt. | P1 |
 
 ### 4.3 User questions
@@ -164,6 +167,7 @@ The must-have features of v1 (P0) are detection, classification suggestions, que
 | --- | --- | --- |
 | FR-3.1 | With `high` confidence, do not ask; call `save` directly. | P0 |
 | FR-3.2 | With `low` confidence, ask with 2 or 3 options. Always include "leave unclassified (`unclassified`)" among them. | P0 |
+| FR-3.4 | For an admin route (literal `/admin` or an `adminPaths` match) without a `gate`, `analyze` returns `needsGate` and `gateOptions`, and the skill asks the user to choose passphrase (8+ characters), SSO/MFA or none. The passphrase is never requested, printed or stored. | P0 |
 | FR-3.3 | Record values the user chose as `reason.source: user`. | P0 |
 
 ### 4.4 Saving
@@ -181,6 +185,9 @@ The must-have features of v1 (P0) are detection, classification suggestions, que
 | FR-5.1 | Report routes with no sidecar, orphan sidecars, schema violations, `unclassified` values, and sidecars inside statically served directories. | P0 |
 | FR-5.2 | In `annotate` mode only warn and exit with code 0. In `enforce` mode or with `--strict`, exit with code 1 on a violation. | P0 |
 | FR-5.1a | Warn (`admin-no-network-restriction`) when a sidecar's route is an admin route (literal `/admin` or an `adminPaths` match) or has `internal` exposure, and `enforcement.via` lacks `ip-allowlist` or `mtls`. A hidden path or a login alone is not a network restriction. | P1 |
+| FR-5.1b | Warn (`admin-no-gate`) when an admin route has no `gate`. | P1 |
+| FR-5.1c | Warn (`admin-path-exposed`) when any scanned file (source, HTML, Markdown, `robots.txt`, sitemap) outside the route's own files references an admin, gated or internal route, unless the sidecar sets `linkable: true`. Config files (`*.config.*`, `middleware.*`) and tests are skipped. | P1 |
+| FR-5.1d | The PostToolUse hook runs the same reference scan on any edited non-route file and reports hits to the agent, which must remove the link unless the user explicitly asks to keep it. | P1 |
 | FR-5.3 | Print both a human-readable summary and machine-readable JSON (`--json`). | P1 |
 
 ### 4.6 Compilation (`compile`, opt-in)

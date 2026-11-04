@@ -2,6 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 const R = require('./routes');
+const { protectedRoutes, scanFile } = require('./links');
 const { validate } = require('./validate');
 
 const NETWORK_RESTRICTIONS = ['ip-allowlist', 'mtls'];
@@ -9,10 +10,12 @@ const NETWORK_RESTRICTIONS = ['ip-allowlist', 'mtls'];
 function check(root = process.cwd(), { strict = false } = {}) {
   const config = R.loadConfig(root);
   const findings = [];
+  const allFiles = [];
   const expected = new Set();   // sidecars that should exist
   const existing = [];          // sidecars on disk
 
   R.walk(root, (rel) => {
+    allFiles.push(rel);
     if (R.isRouteFile(rel, config)) expected.add(R.sidecarPathFor(rel));
     if (/(^|\/)(?:[A-Za-z0-9_-]+)?\.route\.json$/.test(rel)) existing.push(rel);
   });
@@ -35,11 +38,17 @@ function check(root = process.cwd(), { strict = false } = {}) {
         && !via.some((v) => NETWORK_RESTRICTIONS.includes(v))) {
       findings.push({ type: 'admin-no-network-restriction', file: rel, message: `${doc.route} is admin/internal but enforcement.via lacks ${NETWORK_RESTRICTIONS.join(' or ')}; a hidden path or login alone is not a network restriction` });
     }
+    if (R.isAdminRoute(doc.route, config.adminPaths) && !doc.gate) {
+      findings.push({ type: 'admin-no-gate', file: rel, message: `${doc.route} is an admin route with no extra gate recorded (passphrase of 8+ characters, SSO or MFA); a login alone is one factor` });
+    }
     if (!expected.has(rel)) findings.push({ type: 'orphan', file: rel, message: 'no matching route source (deleted or renamed?)' });
   }
   for (const rel of [...expected].sort()) {
     if (!existing.includes(rel)) findings.push({ type: 'missing', file: rel, message: 'route has no sidecar' });
   }
+
+  const prot = protectedRoutes(docs, config.adminPaths);
+  if (prot.length) for (const rel of allFiles) findings.push(...scanFile(root, rel, prot));
 
   const enforcing = (f) => docs.get(f.file)?.mode === 'enforce';
   const failing = findings.filter((f) => strict || enforcing(f));

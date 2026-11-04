@@ -5,6 +5,7 @@
 const path = require('path');
 const R = require('../cli/src/routes');
 const { analyze } = require('../cli/src/analyze');
+const L = require('../cli/src/links');
 
 let input = '';
 process.stdin.on('data', (d) => (input += d));
@@ -15,7 +16,18 @@ process.stdin.on('end', () => {
     if (!file) return;
     const root = evt.cwd || process.cwd();
     const rel = R.toPosix(path.relative(root, path.resolve(root, file)));
-    if (rel.startsWith('..') || !R.isRouteFile(rel, R.loadConfig(root))) return;
+    if (rel.startsWith('..')) return;
+    const config = R.loadConfig(root);
+    if (!R.isRouteFile(rel, config)) {
+      // Not a route: make sure it does not link to an admin / gated / internal route.
+      const hits = L.scanFile(root, rel, L.protectedRoutes(L.loadSidecars(root), config.adminPaths));
+      if (hits.length) {
+        const msg = ['security-sidecar: this file references protected route(s). Remove the link unless the user explicitly wants it; if they do, set "linkable": true in that route\'s sidecar.',
+          ...hits.map((h) => `- ${h.file}:${h.line} -> ${h.route}`)].join('\n');
+        process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: msg } }));
+      }
+      return;
+    }
 
     const result = analyze(rel, { root });
     const cli = path.join(__dirname, '..', 'cli', 'bin', 'security-sidecar.js');

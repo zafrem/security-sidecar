@@ -120,7 +120,7 @@ test('plugin hook emits context for route files only, and the bundle is current'
   const hit = JSON.parse(run('app/api/login/route.ts').stdout);
   assert.match(hit.hookSpecificOutput.additionalContext, /"route": "\/api\/login"/);
   assert.strictEqual(run('lib/util.ts').stdout, '');
-  for (const f of ['src/analyze.js', 'src/save.js', 'src/check.js', 'src/compile.js', 'src/routes.js', 'src/targets/nginx.js', 'schema/route.schema.json']) {
+  for (const f of ['src/analyze.js', 'src/save.js', 'src/check.js', 'src/compile.js', 'src/routes.js', 'src/targets/nginx.js', 'src/links.js', 'src/guidance.js', 'schema/route.schema.json']) {
     assert.strictEqual(fs.readFileSync(path.join(__dirname, '..', 'plugins/security-sidecar/cli', f), 'utf8'), fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), `${f} out of date; run npm run bundle`);
   }
 });
@@ -151,4 +151,61 @@ test('check warns when admin/internal routes lack a network restriction', () => 
   assert.deepStrictEqual(hits, ['app/jobs/.route.json', 'app/ops-k7Qx92mVbT4nLw/.route.json']);
   assert.strictEqual(check(root).exitCode, 0, 'warning only in annotate mode');
   assert.strictEqual(check(root, { strict: true }).exitCode, 1);
+});
+
+test('analyze gives guidance and asks for a gate on admin routes', () => {
+  const a = analyzeSource({ relPath: 'app/admin/route.ts', source: 'export function GET(){}' });
+  assert.strictEqual(a.needsGate, true);
+  assert.ok(a.gateOptions.some((o) => o.gate && o.gate.minLength === 8));
+  assert.ok(a.guidance.some((g) => /404/.test(g)));
+  const p = analyzeSource({ relPath: 'app/blog/page.tsx', source: '' });
+  assert.ok(p.guidance.some((g) => /sitemap/i.test(g)));
+  assert.strictEqual(p.needsGate, undefined);
+  assert.ok(analyzeSource({ relPath: 'app/reports/route.ts', source: 'export function GET(){}' }).options.some((o) => /SEO/.test(o.label)));
+});
+
+test('gate: passphrase needs 8+ chars, no secret stored, human setting preserved', () => {
+  const d = tmp();
+  const base = { route: '/admin', methods: { GET: { exposure: 'authenticated' } } };
+  assert.strictEqual(save(d, { ...base, gate: { type: 'passphrase', minLength: 4 } }).code, 2);
+  assert.strictEqual(save(d, { ...base, gate: { type: 'passphrase', password: 'hunter2hunter2' } }).code, 2);
+  assert.ok(save(d, { ...base, gate: { type: 'passphrase', minLength: 12 } }).ok);
+  assert.ok(save(d, base).ok, 're-save without gate');
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(d, '.route.json'), 'utf8')).gate.minLength, 12);
+});
+
+test('check flags links to admin routes outside the route, unless linkable', () => {
+  const root = tmp();
+  put(root, 'app/admin/route.ts', 'export function GET(){}');
+  put(root, 'app/admin/users/page.tsx', 'export default () => <a href="/admin">back</a>');
+  put(root, 'app/admin/.route.json', JSON.stringify({ version: 1, route: '/admin', gate: { type: 'sso' }, methods: { GET: { exposure: 'authenticated' } }, enforcement: { via: ['ip-allowlist'] } }));
+  put(root, 'app/page.tsx', 'export default () => <a href="/admin">Admin</a>');
+  put(root, 'app/api/admin-stats/route.ts', 'const x = "/administrator"; const y = "/api/admin"');
+  put(root, 'public/robots.txt', 'Disallow: /admin');
+  put(root, 'app/layout.tsx', 'const u = "https://site.com/admin"');
+  const exposed = check(root).findings.filter((f) => f.type === 'admin-path-exposed').map((f) => f.file).sort();
+  assert.deepStrictEqual(exposed, ['app/layout.tsx', 'app/page.tsx', 'public/robots.txt']);
+  assert.ok(!check(root).findings.some((f) => f.type === 'admin-no-gate'), 'gate recorded');
+  const side = path.join(root, 'app/admin/.route.json');
+  fs.writeFileSync(side, JSON.stringify({ ...JSON.parse(fs.readFileSync(side, 'utf8')), linkable: true }));
+  assert.strictEqual(check(root).findings.filter((f) => f.type === 'admin-path-exposed').length, 0);
+});
+
+test('check warns when an admin route has no gate', () => {
+  const root = tmp();
+  put(root, 'app/admin/route.ts', 'export function GET(){}');
+  put(root, 'app/admin/.route.json', JSON.stringify({ version: 1, route: '/admin', methods: { GET: { exposure: 'authenticated' } } }));
+  assert.ok(check(root).findings.some((f) => f.type === 'admin-no-gate'));
+});
+
+test('hook warns when a non-route file links to an admin route', () => {
+  const hook = path.join(__dirname, '..', 'plugins', 'security-sidecar', 'hooks', 'post-tool-use.js');
+  const root = tmp();
+  put(root, 'app/admin/route.ts', 'export function GET(){}');
+  put(root, 'app/admin/.route.json', JSON.stringify({ version: 1, route: '/admin', methods: { GET: { exposure: 'authenticated' } } }));
+  put(root, 'components/Nav.tsx', 'export const Nav = () => <a href="/admin">x</a>');
+  put(root, 'components/Footer.tsx', 'export const Footer = () => null');
+  const run = (file) => spawnSync('node', [hook], { input: JSON.stringify({ cwd: root, tool_input: { file_path: path.join(root, file) } }), encoding: 'utf8' }).stdout;
+  assert.match(JSON.parse(run('components/Nav.tsx')).hookSpecificOutput.additionalContext, /components\/Nav\.tsx:1 -> \/admin/);
+  assert.strictEqual(run('components/Footer.tsx'), '');
 });

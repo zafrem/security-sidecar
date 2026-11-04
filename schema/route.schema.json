@@ -35,6 +35,16 @@
         "rule": { "type": "string" }
       }
     },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["passphrase", "sso", "mfa", "basic-auth", "other"] },
+        "minLength": { "type": "integer", "minimum": 8 }
+      }
+    },
+    "linkable": { "type": "boolean" },
     "notes": { "type": "string" }
   },
   "$defs": {

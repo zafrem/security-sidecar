@@ -4,7 +4,7 @@ const path = require('path');
 const { validate } = require('./validate');
 const { findSecrets } = require('./secrets');
 
-const KEY_ORDER = ['version', 'mode', 'route', 'methods', 'enforcement', 'reason', 'notes'];
+const KEY_ORDER = ['version', 'mode', 'route', 'methods', 'enforcement', 'gate', 'linkable', 'reason', 'notes'];
 const POLICY_ORDER = ['exposure', 'cache', 'indexing', 'rateLimit'];
 const METHOD_ORDER = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS', '*'];
 const SIDECAR_NAME = /^(?:[A-Za-z0-9_-]+)?\.route\.json$/;
@@ -27,7 +27,7 @@ function merge(existing, incoming) {
   doc.version = 1;
   doc.mode = existing.mode || incoming.mode || 'annotate';
   if (existing.notes) doc.notes = existing.notes;
-  if (existing.enforcement && !incoming.enforcement) doc.enforcement = existing.enforcement;
+  for (const k of ['enforcement', 'gate', 'linkable']) if (k in existing && !(k in incoming)) doc[k] = existing[k];
   const incomingIsUser = incoming.reason && incoming.reason.source === 'user';
   const existingIsUser = existing.reason && existing.reason.source === 'user';
   doc.methods = { ...incoming.methods };

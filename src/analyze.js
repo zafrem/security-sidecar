@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const R = require('./routes');
+const { guidance } = require('./guidance');
 
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const AUTH_SEGMENTS = ['admin', 'auth', 'api', 'user', 'users', 'account', 'cart', 'checkout', 'login', 'logout', 'signup', 'session', 'dashboard', 'settings', 'payment', 'billing'];
@@ -52,15 +53,26 @@ function analyzeSource({ relPath, source = '', methods, adminPaths = [] }) {
     methods: Object.fromEntries(ms.map((m) => [m, exposure === 'unclassified' ? { exposure } : { ...suggestion, exposure }])),
   });
   const reasonRule = rule;
+  const isAdmin = R.isAdminRoute(route, adminPaths);
   const options = [];
   if (confidence === 'low') {
-    options.push({ label: 'Authenticated (recommended)', policy: policyFor('authenticated') });
-    options.push({ label: 'Public', policy: policyFor('public') });
+    options.push({ label: 'Secured: login required, not indexed (recommended)', policy: policyFor('authenticated') });
+    options.push({ label: 'Public: open to everyone and indexable by search engines (SEO)', policy: policyFor('public') });
     options.push({ label: 'Leave unclassified', policy: policyFor('unclassified') });
   }
   return {
     route, methods: ms, suggestion, confidence, needsUserInput: confidence === 'low', options,
     policy: { ...policyFor(suggestion.exposure), reason: { source: 'heuristic', rule: reasonRule } },
+    isAdmin,
+    guidance: guidance({ exposure: suggestion.exposure, relPath, isAdmin }),
+    ...(isAdmin ? {
+      needsGate: true,
+      gateOptions: [
+        { label: 'Passphrase of 8+ characters from an env var (16+ recommended)', gate: { type: 'passphrase', minLength: 8 } },
+        { label: 'SSO / MFA', gate: { type: 'sso' } },
+        { label: 'No extra gate (not recommended)', gate: null },
+      ],
+    } : {}),
   };
 }
 
@@ -76,7 +88,8 @@ function analyze(file, { root = process.cwd(), methods } = {}) {
   out.saveFile = path.posix.basename(sidecar);
   try {
     const ex = JSON.parse(fs.readFileSync(path.join(root, sidecar), 'utf8'));
-    out.existing = { mode: ex.mode || 'annotate', reasonSource: ex.reason && ex.reason.source, hasNotes: !!ex.notes };
+    out.existing = { mode: ex.mode || 'annotate', reasonSource: ex.reason && ex.reason.source, hasNotes: !!ex.notes, gate: ex.gate, linkable: ex.linkable };
+    if (ex.gate) out.needsGate = false;
   } catch { /* none yet */ }
   return out;
 }
