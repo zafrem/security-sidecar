@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "mode": "annotate",
+  "route": "/api/login",
+  "methods": {
+    "POST": {
+      "exposure": "authenticated",
+      "cache": {
+        "policy": "no-store"
+      }
+    }
+  },
+  "reason": {
+    "source": "heuristic",
+    "rule": "path-api"
+  }
+}

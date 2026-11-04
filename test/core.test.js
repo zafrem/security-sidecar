@@ -1,0 +1,126 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const { spawnSync } = require('child_process');
+const { analyzeSource } = require('../src/analyze');
+const { save } = require('../src/save');
+const { check } = require('../src/check');
+const { compile } = require('../src/compile');
+const R = require('../src/routes');
+
+const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'ss-'));
+const put = (root, rel, text) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), text); };
+
+test('detects route files and derives URLs', () => {
+  assert.ok(R.isRouteFile('app/api/login/route.ts'));
+  assert.ok(!R.isRouteFile('app/components/Button.tsx'));
+  assert.ok(!R.isRouteFile('node_modules/x/routes/a.js'));
+  assert.strictEqual(R.routeFromPath('app/(shop)/products/[id]/page.tsx'), '/products/[id]');
+  assert.strictEqual(R.routeFromPath('src/app/api/v1/payment/route.ts'), '/api/v1/payment');
+  assert.strictEqual(R.routeFromPath('pages/api/users.ts'), '/api/users');
+  assert.strictEqual(R.routeFromPath('server/routes/orders.js'), '/orders');
+});
+
+test('classification is conservative', () => {
+  const a = analyzeSource({ relPath: 'app/api/login/route.ts', source: 'export async function POST(){}' });
+  assert.strictEqual(a.confidence, 'high');
+  assert.strictEqual(a.suggestion.exposure, 'authenticated');
+  const b = analyzeSource({ relPath: 'app/reports/route.ts', source: 'export async function GET(){}' });
+  assert.strictEqual(b.needsUserInput, true);
+  assert.strictEqual(b.suggestion.exposure, 'authenticated');
+  assert.ok(b.options.some((o) => o.policy.methods.GET.exposure === 'unclassified'));
+  const c = analyzeSource({ relPath: 'app/blog/page.tsx', source: '' });
+  assert.strictEqual(c.suggestion.exposure, 'public');
+});
+
+test('save validates, is deterministic, and preserves human edits', () => {
+  const d = tmp();
+  const policy = { route: '/api/x', methods: { POST: { cache: { policy: 'no-store' }, exposure: 'authenticated' } }, reason: { source: 'heuristic', rule: 'r' } };
+  const r1 = save(d, policy);
+  assert.ok(r1.ok);
+  const text = fs.readFileSync(path.join(d, '.route.json'), 'utf8');
+  assert.ok(text.indexOf('"exposure"') < text.indexOf('"cache"'), 'stable key order');
+  assert.strictEqual(JSON.parse(text).mode, 'annotate');
+  assert.strictEqual(save(d, policy).written, false, 'idempotent');
+
+  // person edits notes + picks a value
+  const doc = JSON.parse(text); doc.notes = 'hand written'; doc.reason = { source: 'user' }; doc.methods.POST.exposure = 'internal';
+  fs.writeFileSync(path.join(d, '.route.json'), JSON.stringify(doc));
+  assert.ok(save(d, policy).ok);
+  const after = JSON.parse(fs.readFileSync(path.join(d, '.route.json'), 'utf8'));
+  assert.strictEqual(after.notes, 'hand written');
+  assert.strictEqual(after.methods.POST.exposure, 'internal');
+});
+
+test('save rejects schema violations and secrets, writing nothing', () => {
+  const d = tmp();
+  const bad = save(d, { route: '/a', methods: { GET: { exposure: 'nope' } } });
+  assert.strictEqual(bad.code, 2);
+  const unk = save(d, { route: '/a', methods: { GET: { exposure: 'public' } }, extra: 1 });
+  assert.strictEqual(unk.code, 2);
+  for (const notes of ['postgres://admin:hunter22@db/prod', 'token=abcdef123456', 'AKIAABCDEFGHIJKLMNOP']) {
+    const r = save(d, { route: '/a', methods: { GET: { exposure: 'public' } }, notes });
+    assert.strictEqual(r.code, 2, notes);
+  }
+  assert.strictEqual(save(d, { route: '/a', methods: { GET: { exposure: 'public' } } }, { file: '../evil.route.json' }).code, 2);
+  assert.deepStrictEqual(fs.readdirSync(d), []);
+});
+
+test('check: missing, orphan, unclassified, static; annotate exits 0, strict exits 1', () => {
+  const root = tmp();
+  put(root, 'app/api/a/route.ts', 'export function GET(){}');
+  put(root, 'app/api/b/route.ts', 'export function GET(){}');
+  put(root, 'app/api/b/.route.json', JSON.stringify({ version: 1, route: '/api/b', methods: { GET: { exposure: 'unclassified' } } }));
+  put(root, 'app/gone/.route.json', JSON.stringify({ version: 1, route: '/gone', methods: { GET: { exposure: 'public' } } }));
+  put(root, 'public/.route.json', JSON.stringify({ version: 1, route: '/p', methods: { GET: { exposure: 'public' } } }));
+  const r = check(root);
+  const types = r.findings.map((f) => f.type).sort();
+  assert.deepStrictEqual(types, ['missing', 'orphan', 'orphan', 'static-served', 'unclassified']);
+  assert.strictEqual(r.exitCode, 0);
+  assert.strictEqual(check(root, { strict: true }).exitCode, 1);
+});
+
+test('check fails on violations in enforce-mode sidecars', () => {
+  const root = tmp();
+  put(root, 'app/x/route.ts', 'export function GET(){}');
+  put(root, 'app/x/.route.json', JSON.stringify({ version: 1, mode: 'enforce', route: '/x', methods: { GET: { exposure: 'unclassified' } } }));
+  assert.strictEqual(check(root).exitCode, 1);
+});
+
+test('compile: enforce only, skips by via, refuses unclassified', () => {
+  const root = tmp();
+  const w = (rel, doc) => put(root, rel, JSON.stringify({ version: 1, ...doc }));
+  w('app/a/.route.json', { mode: 'enforce', route: '/admin/a', methods: { GET: { exposure: 'internal' } }, enforcement: { via: ['ip-allowlist'] } });
+  w('app/b/.route.json', { mode: 'enforce', route: '/b/[id]', methods: { POST: { exposure: 'authenticated', cache: { policy: 'no-store' }, rateLimit: { windowMs: 60000, max: 10 } } }, enforcement: { via: ['api-gateway'] } });
+  w('app/c/.route.json', { mode: 'enforce', route: '/c', methods: { GET: { exposure: 'public' } }, enforcement: { via: ['app-middleware'] } });
+  w('app/d/.route.json', { route: '/d', methods: { GET: { exposure: 'unclassified' } } });
+  const r = compile(root, 'nginx');
+  assert.ok(r.ok);
+  assert.strictEqual(r.compiled, 2);
+  assert.deepStrictEqual(r.skipped.map((s) => s.route), ['/c']);
+  const conf = fs.readFileSync(r.target, 'utf8');
+  assert.match(conf, /location = \/admin\/a/);
+  assert.match(conf, /location ~ \^\/b\/\[\^\/\]\+\$/);
+  assert.match(conf, /limit_req_zone .* rate=10r\/m/);
+  assert.ok(!conf.includes('/d'), 'annotate sidecars are not compiled');
+  assert.strictEqual(compile(root, 'nextjs').ok, false);
+  w('app/e/.route.json', { mode: 'enforce', route: '/e', methods: { GET: { exposure: 'unclassified' } } });
+  assert.strictEqual(compile(root, 'nginx').code, 1);
+});
+
+test('plugin hook emits context for route files only, and the bundle is current', () => {
+  const hook = path.join(__dirname, '..', 'plugins', 'security-sidecar', 'hooks', 'post-tool-use.js');
+  const root = tmp();
+  put(root, 'app/api/login/route.ts', 'export async function POST(){}');
+  put(root, 'lib/util.ts', 'export const x = 1');
+  const run = (file) => spawnSync('node', [hook], { input: JSON.stringify({ cwd: root, tool_input: { file_path: path.join(root, file) } }), encoding: 'utf8' });
+  const hit = JSON.parse(run('app/api/login/route.ts').stdout);
+  assert.match(hit.hookSpecificOutput.additionalContext, /"route": "\/api\/login"/);
+  assert.strictEqual(run('lib/util.ts').stdout, '');
+  for (const f of ['src/analyze.js', 'src/save.js', 'src/check.js', 'src/compile.js', 'src/routes.js', 'src/targets/nginx.js', 'schema/route.schema.json']) {
+    assert.strictEqual(fs.readFileSync(path.join(__dirname, '..', 'plugins/security-sidecar/cli', f), 'utf8'), fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), `${f} out of date; run npm run bundle`);
+  }
+});

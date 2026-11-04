@@ -1,0 +1,7 @@
+{
+  "name": "security-sidecar",
+  "version": "0.1.0",
+  "description": "Records each web route's protection intent in a .route.json sidecar next to the code. Annotate-only by default; it enforces nothing.",
+  "author": { "name": "zafrem" },
+  "license": "MIT"
+}

@@ -1,0 +1,12 @@
+{
+  "name": "security-sidecar",
+  "version": "0.1.0",
+  "description": "Records the protection intent of each web route in a .route.json sidecar file.",
+  "license": "MIT",
+  "bin": { "security-sidecar": "bin/security-sidecar.js" },
+  "scripts": {
+    "bundle": "node scripts/bundle.js",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "engines": { "node": ">=18" }
+}

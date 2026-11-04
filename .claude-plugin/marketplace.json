@@ -1,0 +1,11 @@
+{
+  "name": "security-sidecar",
+  "owner": { "name": "zafrem" },
+  "plugins": [
+    {
+      "name": "security-sidecar",
+      "source": "./plugins/security-sidecar",
+      "description": "Records each web route's protection intent in a .route.json sidecar whenever an AI agent creates or changes a route. Annotate-only by default; it enforces nothing."
+    }
+  ]
+}

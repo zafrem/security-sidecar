@@ -1,16 +1,16 @@
-# route-sidecar Software Requirements Specification (SRS)
+# security-sidecar Software Requirements Specification (SRS)
 
 Nov 4, 2026 · @Mark
 
 ## 1. Overview
 
-route-sidecar records the protection intent of each web route in a `.route.json` sidecar file next to the code, whenever an AI coding agent creates or changes a route. By default it only records; it enforces nothing.
+security-sidecar records the protection intent of each web route in a `.route.json` sidecar file next to the code, whenever an AI coding agent creates or changes a route. By default it only records; it enforces nothing.
 
 ### 1.1 Purpose
 
 - Keep each route's intended exposure, caching and rate limiting in the codebase.
 - Make sure that record is not skipped when an agent adds or edits a route.
-- Let teams that want it compile the records into Nginx or Next.js middleware configuration (opt-in).
+- Let teams that want it compile the records into Nginx configuration (opt-in; Next.js middleware later).
 
 ### 1.2 Scope
 
@@ -24,7 +24,7 @@ route-sidecar records the protection intent of each web route in a `.route.json`
 
 | Term | Definition |
 | --- | --- |
-| Sidecar | The `.route.json` metadata file placed in the same directory as the route source |
+| Sidecar | The `.route.json` or `<name>.route.json` metadata file placed in the same directory as the route source |
 | Intent | The declaration in the sidecar of what a route should be. It blocks nothing by itself |
 | Enforcement | The means that actually uphold the intent: app middleware, API gateway, WAF, IP allowlist, mTLS and so on |
 | Mode | `annotate` (record only) or `enforce` (included in compilation) |
@@ -50,17 +50,17 @@ All logic lives in one core CLI and one schema. The Claude Code plugin is an ada
 | --- | --- | --- |
 | Core CLI | Runs `analyze`, `save`, `compile` and `check`. Every output is JSON | `src/` |
 | Schema | Single source of truth for `.route.json` | `schema/route.schema.json` |
-| Claude Code adapter | Hook (detection), skill (questioning rules), slash commands (entry points) | `plugins/route-sidecar/` |
+| Claude Code adapter | Hook (detection), skill (questioning rules), slash commands (entry points) | `plugins/security-sidecar/` |
 | Marketplace manifest | File that lets users register with `/plugin marketplace add` | `.claude-plugin/marketplace.json` |
-| Target converters | Turn the manifest into Nginx or Next.js middleware config (opt-in) | `src/targets/` |
+| Target converters | Turn the manifest into Nginx config (opt-in; Next.js middleware later) | `src/targets/` |
 | Future adapters | Guidance and call instructions for Codex and agy | `adapters/` |
 
 ### 2.2 Repository layout
 
 ```text
-route-sidecar/
+security-sidecar/
 ├─ .claude-plugin/marketplace.json
-├─ plugins/route-sidecar/
+├─ plugins/security-sidecar/
 │  ├─ .claude-plugin/plugin.json
 │  ├─ hooks/hooks.json
 │  ├─ skills/
@@ -128,7 +128,8 @@ Only routes the heuristics cannot classify with confidence reach the user; every
 
 ### 3.3 Storage rules
 
-- The sidecar lives in the same directory as the route source, one per directory.
+- The sidecar lives in the same directory as the route source. Where the directory itself is the route (Next.js app router: `route.ts`, `page.tsx`), the file is `.route.json`, one per directory. Where one directory holds many route files (`pages/`, `routes/`, `routers/`), each route gets `<name>.route.json` named after its source file (`users.ts` gives `users.route.json`).
+- `save` accepts only these file names and refuses any path separator.
 - The schema sets `additionalProperties: false`, so unknown fields are rejected.
 - `save` refuses any field whose value looks like a secret key, token or database connection string.
 - `check` warns when a sidecar sits inside a statically served directory such as `public/` or `static/`.
@@ -143,7 +144,7 @@ The must-have features of v1 (P0) are detection, classification suggestions, que
 | ID | Requirement | Priority |
 | --- | --- | --- |
 | FR-1.1 | The hook runs `analyze` only when the path of a written or edited file matches a route pattern (`app/**/route.ts`, `pages/**`, `routers/**`, `routes/**`, `urls.py` and so on). | P0 |
-| FR-1.2 | Patterns can be added or excluded in `.route-sidecar.config.json`. | P1 |
+| FR-1.2 | Patterns can be added or excluded in `.security-sidecar.config.json`. | P1 |
 | FR-1.3 | `check` reports the sidecar of a deleted or renamed route as an orphan. | P1 |
 
 ### 4.2 Classification suggestions
@@ -185,9 +186,9 @@ The must-have features of v1 (P0) are detection, classification suggestions, que
 | ID | Requirement | Priority |
 | --- | --- | --- |
 | FR-6.1 | Collect only `mode: enforce` sidecars into `routes-manifest.json`. | P1 |
-| FR-6.2 | The v1 target is one of Nginx or Next.js middleware (open issue 6.4). | P1 |
+| FR-6.2 | The v1 target is Nginx (decided, see 6.4). Next.js middleware is P2; `--target nextjs` is rejected. | P1 |
 | FR-6.3 | Warn that the manifest is a list of admin paths, and print guidance to exclude it from deploy artifacts. | P1 |
-| FR-6.4 | Skip and report entries whose `enforcement.via` does not include the target. | P1 |
+| FR-6.4 | Skip and report entries whose `enforcement.via` does not include the target. The Nginx target accepts `api-gateway` and `ip-allowlist`. | P1 |
 | FR-6.5 | Add a Cloudflare converter. | P2 |
 
 ## 5. CLI and Plugin Interface
@@ -198,10 +199,10 @@ The CLI has four subcommands that each print JSON. The plugin connects them to C
 
 | Command | Input | Output | Exit code |
 | --- | --- | --- | --- |
-| `route-sidecar analyze <file>` | Route file path; optional `--methods GET,POST` | Route, methods, suggestion, confidence, `needsUserInput`, options | 0 |
-| `route-sidecar save <dir> --policy <json>` | Target directory and a policy object | Path written and validation result | 0 on success; 2 on schema or secret rejection |
-| `route-sidecar check [root] [--strict] [--json]` | Project root | List of findings | 0 in `annotate`; 1 on violation in `enforce` or `--strict` |
-| `route-sidecar compile [root] --target <nginx\|nextjs>` | Project root and target | Manifest path, target file path, skipped entries | 0 on success; 1 if `unclassified` remains in `enforce` files |
+| `security-sidecar analyze <file>` | Route file path; optional `--methods GET,POST` | Route, methods, suggestion, confidence, `needsUserInput`, options | 0 |
+| `security-sidecar save <dir> --policy <json>` | Target directory and a policy object | Path written and validation result | 0 on success; 2 on schema or secret rejection |
+| `security-sidecar check [root] [--strict] [--json]` | Project root | List of findings | 0 in `annotate`; 1 on violation in `enforce` or `--strict` |
+| `security-sidecar compile [root] --target <nginx\|nextjs>` | Project root and target | Manifest path, target file path, skipped entries | 0 on success; 1 if `unclassified` remains in `enforce` files |
 
 ### 5.2 `analyze` output
 
@@ -224,10 +225,10 @@ When `confidence` is `low`, `needsUserInput` is `true` and `options` holds 2 or 
 | --- | --- | --- |
 | Hook | `hooks/hooks.json` | PostToolUse on Write and Edit. If the path matches a route pattern, run `analyze` and return the JSON to Claude as context |
 | Skill | `skills/route-policy/SKILL.md` | With `high` confidence call `save` silently; with `low` ask the user with 2 or 3 options via AskUserQuestion; never write secret values; respect `mode` |
-| Slash command | `commands/check.md` | `/route-sidecar:check` runs `check` and summarizes findings |
-| Slash command | `commands/compile.md` | `/route-sidecar:compile` runs `compile` for a chosen target |
+| Slash command | `commands/check.md` | `/security-sidecar:check` runs `check` and summarizes findings |
+| Slash command | `commands/compile.md` | `/security-sidecar:compile` runs `compile` for a chosen target |
 | Plugin manifest | `.claude-plugin/plugin.json` | Name, version, description, component paths |
-| Marketplace manifest | `.claude-plugin/marketplace.json` | Lets users run `/plugin marketplace add <owner>/route-sidecar` |
+| Marketplace manifest | `.claude-plugin/marketplace.json` | Lets users run `/plugin marketplace add <owner>/security-sidecar` |
 
 The CLI is bundled inside the plugin directory and called by the hook and commands through the plugin root path, so users install nothing separately.
 
@@ -258,20 +259,28 @@ The tool must stay out of the developer's way, never write secrets, and never cl
 
 Other agents get a new adapter and nothing else: the CLI and schema are reused unchanged. Where an agent has no hook equivalent to PostToolUse, the adapter relies on an instruction file that tells the agent to call `analyze` and `save`, and on `check` in git pre-commit or CI as the safety net. Hook support in each agent still has to be verified.
 
-### 6.4 Open issues
+### 6.4 Decisions and open issues
 
-1. Which single target ships in v1: Nginx or Next.js middleware?
-2. Which second framework ships in v1: FastAPI or Express?
-3. Implementation language of the CLI: Node or Python?
-4. How `analyze` finds routes registered in code (Express, FastAPI, Flask, Django) rather than by file path.
-5. Whether Codex and agy offer hooks equivalent to PostToolUse.
-6. Whether the README subtitle may mention Claude, given Anthropic's trademark guidance.
+Decided for the first implementation:
+
+1. **v1 target: Nginx.** Next.js middleware moves to P2.
+2. **CLI language: Node (18+), no dependencies.** The `route.schema.json` rules are checked by a small built-in validator.
+3. **Second framework: Express and FastAPI are both detected by file path (`routes/`, `routers/`) and method patterns** (`router.get(`, `@router.get(`). Only the Next.js example is tested; neither has an example yet.
+4. **Multi-route directories use `<name>.route.json`** (see 3.3). In Next.js, `page.tsx` is treated as a route and shares the directory's `.route.json` with `route.ts`.
+5. **When a directory's methods differ, Nginx output applies the strictest policy** to the path, because Nginx locations are per path.
+
+Still open:
+
+1. How `analyze` finds routes registered in code (Express, FastAPI, Flask, Django) rather than by file path or method pattern.
+2. Whether Codex and agy offer hooks equivalent to PostToolUse.
+3. Whether the README subtitle may mention Claude, given Anthropic's trademark guidance.
+4. Whether `.route.json` should instead be one file per directory with a `routes` array, to match the original wording of 3.3.
 
 ### 6.5 Milestones
 
 1. **M1.** Schema, `analyze` and `save` working against a Next.js example.
 2. **M2.** `check` with the annotate and strict behaviors.
-3. **M3.** Claude Code plugin wrapper (hook, skill, commands), tested locally with `/plugin marketplace add ./route-sidecar`.
+3. **M3.** Claude Code plugin wrapper (hook, skill, commands), tested locally with `/plugin marketplace add ./security-sidecar`.
 4. **M4.** `compile` for one target.
 5. **M5.** Public release and marketplace registration.
 6. **M6.** Codex and agy adapters.

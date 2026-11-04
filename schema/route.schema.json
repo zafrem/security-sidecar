@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/zafrem/security-sidecar/schema/route.schema.json",
+  "title": "security-sidecar route sidecar",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "route", "methods"],
+  "properties": {
+    "version": { "const": 1 },
+    "mode": { "enum": ["annotate", "enforce"] },
+    "route": { "type": "string", "minLength": 1, "pattern": "^/" },
+    "methods": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "patternProperties": {
+        "^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS|\\*)$": { "$ref": "#/$defs/policy" }
+      }
+    },
+    "enforcement": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "via": {
+          "type": "array",
+          "items": { "enum": ["app-middleware", "api-gateway", "waf", "ip-allowlist", "mtls", "other", "none"] }
+        }
+      }
+    },
+    "reason": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": { "enum": ["heuristic", "user", "agent"] },
+        "rule": { "type": "string" }
+      }
+    },
+    "notes": { "type": "string" }
+  },
+  "$defs": {
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exposure"],
+      "properties": {
+        "exposure": { "enum": ["public", "authenticated", "internal", "unclassified"] },
+        "cache": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["policy"],
+          "properties": {
+            "policy": { "enum": ["no-store", "private", "public", "unspecified"] },
+            "maxAgeSec": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "indexing": { "enum": ["index", "noindex"] },
+        "rateLimit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["windowMs", "max"],
+          "properties": {
+            "windowMs": { "type": "integer", "minimum": 1 },
+            "max": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    }
+  }
+}

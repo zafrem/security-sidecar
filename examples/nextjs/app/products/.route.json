@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "mode": "annotate",
+  "route": "/products",
+  "methods": {
+    "GET": {
+      "exposure": "public",
+      "indexing": "index"
+    }
+  },
+  "reason": {
+    "source": "heuristic",
+    "rule": "path-public-content"
+  }
+}
