@@ -12,13 +12,16 @@ const PUBLIC_SEGMENTS = ['products', 'product', 'blog', 'posts', 'post', 'docs',
 const segs = (route) => route.split('/').filter(Boolean).map((s) => s.toLowerCase());
 const has = (list, s) => s.some((x) => list.includes(x));
 
-function classifyMethod(route, method) {
+function classifyMethod(route, method, adminPaths = []) {
   const s = segs(route);
   const isApi = s[0] === 'api' || s.includes('api');
   if (has(INTERNAL_SEGMENTS, s)) {
     return { exposure: 'internal', cache: { policy: 'no-store' } , confidence: 'high', rule: 'path-internal' };
   }
-  if (has(['admin'], s)) return { exposure: 'authenticated', cache: { policy: 'no-store' }, indexing: 'noindex', confidence: 'high', rule: 'path-admin' };
+  if (R.isAdminRoute(route, adminPaths)) {
+    const configured = !has(['admin'], s);
+    return { exposure: 'authenticated', cache: { policy: 'no-store' }, indexing: 'noindex', confidence: 'high', rule: configured ? 'config-admin-path' : 'path-admin' };
+  }
   if (has(AUTH_SEGMENTS, s)) {
     const p = { exposure: 'authenticated', cache: { policy: 'no-store' }, confidence: 'high', rule: `path-${(AUTH_SEGMENTS.find((a) => s.includes(a)))}` };
     if (!isApi) p.indexing = 'noindex';
@@ -33,11 +36,11 @@ function classifyMethod(route, method) {
 
 const RANK = { unclassified: 0, public: 1, authenticated: 2, internal: 3 };
 
-function analyzeSource({ relPath, source = '', methods }) {
+function analyzeSource({ relPath, source = '', methods, adminPaths = [] }) {
   const route = R.routeFromPath(relPath);
   const detected = methods && methods.length ? methods : R.detectMethods(source, relPath);
   const ms = detected.length ? detected : ['*'];
-  const per = Object.fromEntries(ms.map((m) => [m, classifyMethod(route, m === '*' ? 'GET' : m)]));
+  const per = Object.fromEntries(ms.map((m) => [m, classifyMethod(route, m === '*' ? 'GET' : m, adminPaths)]));
 
   // One suggestion for the whole file: the most restrictive method wins.
   const strongest = Object.values(per).sort((a, b) => RANK[b.exposure] - RANK[a.exposure])[0];
@@ -66,7 +69,7 @@ function analyze(file, { root = process.cwd(), methods } = {}) {
   const relPath = R.toPosix(path.relative(root, abs));
   let source = '';
   try { source = fs.readFileSync(abs, 'utf8'); } catch (e) { throw new Error(`cannot read ${file}: ${e.code || e.message}`); }
-  const out = analyzeSource({ relPath, source, methods });
+  const out = analyzeSource({ relPath, source, methods, adminPaths: R.loadConfig(root).adminPaths });
   const sidecar = R.sidecarPathFor(relPath);
   out.sidecar = sidecar;
   out.saveDir = path.posix.dirname(sidecar) === '.' ? '.' : path.posix.dirname(sidecar);

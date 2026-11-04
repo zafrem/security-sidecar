@@ -40,8 +40,20 @@ function escape(s) { return s.replace(/[.+^$()|[\]\\?]/g, '\\$&'); }
 function loadConfig(root) {
   try {
     const c = JSON.parse(fs.readFileSync(path.join(root, '.security-sidecar.config.json'), 'utf8'));
-    return { include: c.include || [], exclude: c.exclude || [] };
-  } catch { return { include: [], exclude: [] }; }
+    return { include: c.include || [], exclude: c.exclude || [], adminPaths: c.adminPaths || [] };
+  } catch { return { include: [], exclude: [], adminPaths: [] }; }
+}
+
+// True for the literal /admin segment or any route under a configured admin path.
+// adminPaths entries are route prefixes; `*` matches within one segment (e.g. "/ops-*").
+function isAdminRoute(route, adminPaths = []) {
+  const segs = route.split('/').filter(Boolean).map((s) => s.toLowerCase());
+  if (segs.includes('admin')) return true;
+  return adminPaths.some((p) => {
+    const prefix = '/' + p.split('/').filter(Boolean).join('/');
+    const lower = prefix.toLowerCase();
+    return globToRegex(lower).test(route.toLowerCase()) || globToRegex(lower + '/**').test(route.toLowerCase());
+  });
 }
 
 function toPosix(p) { return p.split(path.sep).join('/'); }
@@ -118,5 +130,5 @@ function inStaticDir(relPath) {
 
 module.exports = {
   METHODS, isRouteFile, loadConfig, sidecarName, sidecarPathFor, routeFromPath,
-  detectMethods, walk, inStaticDir, toPosix,
+  detectMethods, walk, inStaticDir, toPosix, isAdminRoute,
 };

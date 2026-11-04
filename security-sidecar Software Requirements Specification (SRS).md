@@ -156,6 +156,7 @@ The must-have features of v1 (P0) are detection, classification suggestions, que
 | FR-2.3 | When unsure, suggest the non-public side. | P0 |
 | FR-2.4 | Suggest `cache` and `indexing` only when there is a signal; otherwise leave them empty. | P0 |
 | FR-2.5 | Adjust confidence using authentication signals in the source (session checks, middleware decorators). | P2 |
+| FR-2.6 | `adminPaths` in `.security-sidecar.config.json` lists route prefixes (`*` matches within one segment) that are treated like `/admin`: suggested as `authenticated`, `no-store`, `noindex` with `high` confidence, so renamed admin paths do not prompt. | P1 |
 
 ### 4.3 User questions
 
@@ -179,6 +180,7 @@ The must-have features of v1 (P0) are detection, classification suggestions, que
 | --- | --- | --- |
 | FR-5.1 | Report routes with no sidecar, orphan sidecars, schema violations, `unclassified` values, and sidecars inside statically served directories. | P0 |
 | FR-5.2 | In `annotate` mode only warn and exit with code 0. In `enforce` mode or with `--strict`, exit with code 1 on a violation. | P0 |
+| FR-5.1a | Warn (`admin-no-network-restriction`) when a sidecar's route is an admin route (literal `/admin` or an `adminPaths` match) or has `internal` exposure, and `enforcement.via` lacks `ip-allowlist` or `mtls`. A hidden path or a login alone is not a network restriction. | P1 |
 | FR-5.3 | Print both a human-readable summary and machine-readable JSON (`--json`). | P1 |
 
 ### 4.6 Compilation (`compile`, opt-in)

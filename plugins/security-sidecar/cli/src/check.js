@@ -4,6 +4,8 @@ const path = require('path');
 const R = require('./routes');
 const { validate } = require('./validate');
 
+const NETWORK_RESTRICTIONS = ['ip-allowlist', 'mtls'];
+
 function check(root = process.cwd(), { strict = false } = {}) {
   const config = R.loadConfig(root);
   const findings = [];
@@ -28,6 +30,11 @@ function check(root = process.cwd(), { strict = false } = {}) {
     docs.set(rel, doc);
     const open = Object.entries(doc.methods).filter(([, p]) => p.exposure === 'unclassified').map(([m]) => m);
     if (open.length) findings.push({ type: 'unclassified', file: rel, message: `unclassified exposure for ${open.join(', ')}` });
+    const via = (doc.enforcement && doc.enforcement.via) || [];
+    if ((R.isAdminRoute(doc.route, config.adminPaths) || Object.values(doc.methods).some((p) => p.exposure === 'internal'))
+        && !via.some((v) => NETWORK_RESTRICTIONS.includes(v))) {
+      findings.push({ type: 'admin-no-network-restriction', file: rel, message: `${doc.route} is admin/internal but enforcement.via lacks ${NETWORK_RESTRICTIONS.join(' or ')}; a hidden path or login alone is not a network restriction` });
+    }
     if (!expected.has(rel)) findings.push({ type: 'orphan', file: rel, message: 'no matching route source (deleted or renamed?)' });
   }
   for (const rel of [...expected].sort()) {

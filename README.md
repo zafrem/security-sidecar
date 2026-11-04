@@ -23,6 +23,18 @@ Local testing: `/plugin marketplace add ./security-sidecar`.
 
 Sidecar naming: `.route.json` where the directory is the route (Next.js app router); `<name>.route.json` where one directory holds many route files.
 
+## Admin pages
+
+A renamed admin path (for example `/ops-k7Qx92mVbT4nLw`) is not recognized as admin unless you list it in `.security-sidecar.config.json`:
+
+```json
+{ "adminPaths": ["/ops-k7Qx92mVbT4nLw", "/backoffice-*"] }
+```
+
+Routes under a listed prefix are suggested as `authenticated`, `no-store`, `noindex` without prompting. `*` matches within one path segment.
+
+A hidden path is not protection. `check` warns about any admin or `internal` route whose `enforcement.via` lacks `ip-allowlist` or `mtls`. Put the real control (network restriction, MFA, server-side role checks) underneath the hidden path.
+
 ## Security notes
 
 - Keep `.route.json` out of statically served directories (`public/`, `static/`). `check` warns about this.

@@ -124,3 +124,31 @@ test('plugin hook emits context for route files only, and the bundle is current'
     assert.strictEqual(fs.readFileSync(path.join(__dirname, '..', 'plugins/security-sidecar/cli', f), 'utf8'), fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), `${f} out of date; run npm run bundle`);
   }
 });
+
+test('adminPaths config classifies renamed admin paths without prompting', () => {
+  const adminPaths = ['/ops-k7Qx92mVbT4nLw'];
+  const a = analyzeSource({ relPath: 'app/ops-k7Qx92mVbT4nLw/users/route.ts', source: 'export function GET(){}', adminPaths });
+  assert.strictEqual(a.confidence, 'high');
+  assert.strictEqual(a.policy.reason.rule, 'config-admin-path');
+  assert.strictEqual(a.suggestion.indexing, 'noindex');
+  assert.strictEqual(analyzeSource({ relPath: 'app/ops-k7Qx92mVbT4nLw/route.ts', source: 'export function GET(){}' }).needsUserInput, true, 'unconfigured path still asks');
+  assert.ok(R.isAdminRoute('/ops-abc/x', ['/ops-*']));
+  assert.ok(!R.isAdminRoute('/ops-abc-extra', ['/ops-abc']));
+});
+
+test('check warns when admin/internal routes lack a network restriction', () => {
+  const root = tmp();
+  put(root, '.security-sidecar.config.json', JSON.stringify({ adminPaths: ['/ops-k7Qx92mVbT4nLw'] }));
+  const w = (dir, route, via, exposure = 'authenticated') => {
+    put(root, `app/${dir}/route.ts`, 'export function GET(){}');
+    put(root, `app/${dir}/.route.json`, JSON.stringify({ version: 1, route, methods: { GET: { exposure } }, ...(via ? { enforcement: { via } } : {}) }));
+  };
+  w('ops-k7Qx92mVbT4nLw', '/ops-k7Qx92mVbT4nLw', ['app-middleware']);
+  w('admin', '/admin', ['ip-allowlist']);
+  w('jobs', '/jobs', null, 'internal');
+  w('shop', '/shop', null, 'public');
+  const hits = check(root).findings.filter((f) => f.type === 'admin-no-network-restriction').map((f) => f.file).sort();
+  assert.deepStrictEqual(hits, ['app/jobs/.route.json', 'app/ops-k7Qx92mVbT4nLw/.route.json']);
+  assert.strictEqual(check(root).exitCode, 0, 'warning only in annotate mode');
+  assert.strictEqual(check(root, { strict: true }).exitCode, 1);
+});
