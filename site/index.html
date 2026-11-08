@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>security-sidecar</title>
+<meta name="description" content="A Claude Code plugin that records each web route's protection intent in a .route.json sidecar and reminds the agent of secure-coding rules. Annotate-only; it enforces nothing.">
+<link rel="icon" href="icon.png">
+<style>
+:root{--bg:#f7f9fb;--fg:#13202f;--muted:#53657a;--card:#fff;--line:#d9e1e8;--accent:#0f766e;--code:#eef3f7;--warn:#fff7d6}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1726;--fg:#e6edf5;--muted:#9fb0c3;--card:#13233a;--line:#243752;--accent:#2dd4bf;--code:#0a1220;--warn:#2e2a12}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:860px;margin:0 auto;padding:0 16px 64px}
+header{padding:56px 0 24px;display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+header img{width:88px;height:88px;border-radius:20px}
+h1{margin:0;font-size:2rem;line-height:1.2}
+.tag{margin:4px 0 0;color:var(--muted);max-width:56ch}
+h2{margin:44px 0 12px;font-size:1.3rem}
+.note{background:var(--warn);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin:8px 0 0}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+.card h3{margin:0 0 6px;font-size:1rem;color:var(--accent)}
+.card p{margin:0;color:var(--muted);font-size:.95rem}
+pre{background:var(--code);border:1px solid var(--line);border-radius:10px;padding:14px;overflow-x:auto;font-size:.88rem;line-height:1.5}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+table{width:100%;border-collapse:collapse;font-size:.92rem}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600}
+a{color:var(--accent)}
+.btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.btn{display:inline-block;padding:9px 16px;border-radius:8px;border:1px solid var(--accent);text-decoration:none;font-weight:600}
+.btn.primary{background:var(--accent);color:var(--bg)}
+footer{margin-top:48px;color:var(--muted);font-size:.9rem}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <img src="icon.png" alt="security-sidecar icon: a shield with a small tab beside it">
+  <div>
+    <h1>security-sidecar</h1>
+    <p class="tag">Every new web route gets a decision: public or secured. The decision is recorded next to the code, and the agent keeps secure-coding rules in mind for everything else it writes.</p>
+    <div class="btns">
+      <a class="btn primary" href="https://github.com/zafrem/security-sidecar">View on GitHub</a>
+      <a class="btn" href="https://github.com/zafrem/security-sidecar/blob/main/docs/PLAYBOOK.md">Playbook</a>
+    </div>
+  </div>
+</header>
+
+<p class="note"><strong>Advice, not a firewall.</strong> A sidecar records intent and blocks nothing in its default annotate mode. The rules are guidance for the agent; they never mean code is secure.</p>
+
+<h2>What it does</h2>
+<div class="grid">
+  <div class="card"><h3>Public or secured</h3><p>When a route file is added, it is classified. Clear cases are saved silently; unsure ones ask you, and the default is secured.</p></div>
+  <div class="card"><h3>Implementation guidance</h3><p>Framework-specific steps: session checks inside the handler, ownership, rate limits, CSRF, caching and indexing.</p></div>
+  <div class="card"><h3>Admin page protection</h3><p>An extra gate (SSO, MFA or a passphrase of 8+ characters), a network restriction, and no links, sitemap or robots.txt entries unless you approve.</p></div>
+  <div class="card"><h3>Risky-code lint</h3><p>Flags <code>eval</code>, shell execution and string-built SQL. Suppressions are listed for review.</p></div>
+  <div class="card"><h3>Secure-coding rules</h3><p>14 language-neutral rules with TypeScript, Python, Go and Java notes, reminded at every session start.</p></div>
+  <div class="card"><h3>Any code assistant</h3><p>The same rules are generated for <code>AGENTS.md</code>, Cursor and Gemini.</p></div>
+</div>
+
+<h2>A sidecar</h2>
+<pre><code>app/admin-k7Qx92mVbT4nLw/.route.json
+{
+  "route": "/admin-k7Qx92mVbT4nLw",
+  "mode": "annotate",
+  "gate": { "type": "passphrase", "minLength": 16 },
+  "enforcement": { "via": ["ip-allowlist"] },
+  "reason": { "source": "user" }
+}</code></pre>
+<p style="color:var(--muted);font-size:.9rem">Abbreviated: the real file also holds per-method exposure, cache and indexing. Illustrative values.</p>
+
+<h2>Install</h2>
+<pre><code>/plugin marketplace add zafrem/security-sidecar
+/plugin install security-sidecar --marketplace zafrem/security-sidecar</code></pre>
+<p>Then check a project: <code>/security-sidecar:check</code>. The CLI is bundled and needs only Node 18+.</p>
+
+<h2>Does the reminder help?</h2>
+<p>A small informal test: one prompt (an Express <code>DELETE /files/:name</code> handler), five runs each way.</p>
+<table>
+<tr><th></th><th>Without plugin</th><th>With plugin</th></tr>
+<tr><td>Flags missing authentication</td><td>0 of 5</td><td>5 of 5</td></tr>
+<tr><td>Strict file-name pattern</td><td>0 of 5</td><td>5 of 5</td></tr>
+<tr><td>Deletes regular files only</td><td>0 of 5</td><td>5 of 5</td></tr>
+<tr><td>Path traversal blocked</td><td>5 of 5</td><td>5 of 5</td></tr>
+</table>
+<p style="color:var(--muted);font-size:.9rem">Plugin runs left a TODO for authentication rather than adding it. One task and ten runs: it shows an effect, not its size.</p>
+
+<h2>Good to know</h2>
+<ul>
+  <li>Enforcement output is Nginx only. Next.js is the tested framework; Express and FastAPI are detected by file path.</li>
+  <li>Link and lint checks are line-based text matching, so expect misses and some false positives.</li>
+  <li><code>reason.source: user</code> is a convention an agent could forge, so review sidecar changes in pull requests.</li>
+  <li>Turn the session reminder off with <code>"guidelines": false</code>.</li>
+</ul>
+
+<footer>MIT licensed · <a href="https://github.com/zafrem/security-sidecar">github.com/zafrem/security-sidecar</a></footer>
+</main>
+</body>
+</html>
