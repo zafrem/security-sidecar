@@ -22,7 +22,7 @@ Records the protection intent of each web route in a `.route.json` sidecar file 
 1) Public or secured decision: every new route is classified as public (indexable, for SEO) or secured, and when unsure it suggests the secured side and asks you.
 2) Implementation guidance: each classification comes with concrete steps for your framework (auth check, `no-store`, `noindex`, rate limiting for secured routes; caching, metadata and sitemap for public ones).
 3) Extra gate for admin pages: `/admin` and any path in `adminPaths` prompts for a second step (a passphrase of 8+ characters, SSO or MFA). Only the type and minimum length are recorded, never the secret.
-4) No links to admin pages: `check` and the editing hook flag any link, sitemap entry or `robots.txt` line that points to an admin, gated or internal route, until you set `"linkable": true` for it.
+4) No links to admin pages: `check` and the editing hook flag any link, sitemap entry or `robots.txt` line that points to an admin, gated or internal route, until you approve it. Setting `"linkable": true` needs your explicit confirmation; `save` refuses it otherwise and `check` flags a hand-edited one.
 5) Renamed admin paths: list them in `adminPaths` and they are treated like `/admin`.
 6) Network restriction warning: admin and internal routes warn if no `ip-allowlist` or `mtls` is recorded.
 7) Secret rejection: keys, tokens, passwords and connection strings are refused before anything is written.
@@ -65,7 +65,7 @@ The plugin then asks which extra gate to use and records it in the sidecar:
 "gate": { "type": "passphrase", "minLength": 8 }
 ```
 
-The passphrase itself must live in an environment variable or secret store. It is never written to a sidecar (`save` rejects it). To allow a link to an admin page on purpose, add `"linkable": true` to that sidecar.
+The passphrase itself must live in an environment variable or secret store. It is never written to a sidecar (`save` rejects it). To allow a link to an admin page on purpose, confirm it when the plugin asks. It then saves `"linkable": true` with `reason.source: user`.
 
 A hidden path is not protection. `check` warns about any admin or `internal` route whose `enforcement.via` lacks `ip-allowlist` or `mtls`. Put the real control (network restriction, MFA, server-side role checks) underneath the hidden path.
 

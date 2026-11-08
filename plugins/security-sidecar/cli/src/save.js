@@ -50,6 +50,11 @@ function save(dir, policy, { file = '.route.json' } = {}) {
   }
   const doc = existing ? merge(existing, incoming) : { mode: 'annotate', ...incoming };
 
+  // Making a protected route linkable removes a protection, so it needs the user's own approval.
+  if (doc.linkable === true && !(existing && existing.linkable === true) && !(doc.reason && doc.reason.source === 'user')) {
+    return { ok: false, code: 2, error: '"linkable": true needs the user\'s approval: ask them, then save with reason.source "user"' };
+  }
+
   const v = validate(doc);
   if (!v.valid) return { ok: false, code: 2, error: 'schema validation failed', errors: v.errors };
   const secrets = findSecrets(doc);

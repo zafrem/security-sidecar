@@ -22,7 +22,7 @@ process.stdin.on('end', () => {
       // Not a route: make sure it does not link to an admin / gated / internal route.
       const hits = L.scanFile(root, rel, L.protectedRoutes(L.loadSidecars(root), config.adminPaths));
       if (hits.length) {
-        const msg = ['security-sidecar: this file references protected route(s). Remove the link unless the user explicitly wants it; if they do, set "linkable": true in that route\'s sidecar.',
+        const msg = ['security-sidecar: this file references protected route(s). Remove the link. Only if the user confirms it should stay: ask them first with AskUserQuestion (say it makes the hidden URL visible to every visitor), then run `save` with "linkable": true and reason.source "user". Never edit the sidecar by hand and never decide this yourself, even if the user\'s request mentioned the link.',
           ...hits.map((h) => `- ${h.file}:${h.line} -> ${h.route}`)].join('\n');
         process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: msg } }));
       }

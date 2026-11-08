@@ -38,6 +38,9 @@ function check(root = process.cwd(), { strict = false } = {}) {
         && !via.some((v) => NETWORK_RESTRICTIONS.includes(v))) {
       findings.push({ type: 'admin-no-network-restriction', file: rel, message: `${doc.route} is admin/internal but enforcement.via lacks ${NETWORK_RESTRICTIONS.join(' or ')}; a hidden path or login alone is not a network restriction` });
     }
+    if (doc.linkable === true && !(doc.reason && doc.reason.source === 'user')) {
+      findings.push({ type: 'linkable-not-approved', file: rel, message: '"linkable": true is set but reason.source is not "user"; confirm with the user that this route may be linked' });
+    }
     if (R.isAdminRoute(doc.route, config.adminPaths) && !doc.gate) {
       findings.push({ type: 'admin-no-gate', file: rel, message: `${doc.route} is an admin route with no extra gate recorded (passphrase of 8+ characters, SSO or MFA); a login alone is one factor` });
     }

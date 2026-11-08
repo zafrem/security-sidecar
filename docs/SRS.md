@@ -188,6 +188,7 @@ The must-have features of v1 (P0) are detection, classification suggestions, que
 | FR-5.1b | Warn (`admin-no-gate`) when an admin route has no `gate`. | P1 |
 | FR-5.1c | Warn (`admin-path-exposed`) when any scanned file (source, HTML, Markdown, `robots.txt`, sitemap) outside the route's own files references an admin, gated or internal route, unless the sidecar sets `linkable: true`. Config files (`*.config.*`, `middleware.*`) and tests are skipped. | P1 |
 | FR-5.1d | The PostToolUse hook runs the same reference scan on any edited non-route file and reports hits to the agent, which must remove the link unless the user explicitly asks to keep it. | P1 |
+| FR-5.1e | `save` refuses `linkable: true` unless the policy carries `reason.source: user` (or the sidecar was already linkable), and `check` warns (`linkable-not-approved`) when `linkable: true` is present without `reason.source: user`. The skill must ask the user before setting it, even when the user's own request mentioned the link. | P0 |
 | FR-5.3 | Print both a human-readable summary and machine-readable JSON (`--json`). | P1 |
 
 ### 4.6 Compilation (`compile`, opt-in)

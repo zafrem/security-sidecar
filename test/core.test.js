@@ -209,3 +209,22 @@ test('hook warns when a non-route file links to an admin route', () => {
   assert.match(JSON.parse(run('components/Nav.tsx')).hookSpecificOutput.additionalContext, /components\/Nav\.tsx:1 -> \/admin/);
   assert.strictEqual(run('components/Footer.tsx'), '');
 });
+
+test('linkable needs user approval: save refuses, check flags hand edits', () => {
+  const d = tmp();
+  const base = { route: '/admin', methods: { GET: { exposure: 'authenticated' } } };
+  const refused = save(d, { ...base, linkable: true, reason: { source: 'agent' } });
+  assert.strictEqual(refused.code, 2);
+  assert.match(refused.error, /approval/);
+  assert.deepStrictEqual(fs.readdirSync(d), []);
+  assert.ok(save(d, { ...base, linkable: true, reason: { source: 'user' } }).ok);
+  assert.ok(save(d, { ...base, reason: { source: 'heuristic' } }).ok, 're-save keeps an approved linkable');
+  assert.strictEqual(JSON.parse(fs.readFileSync(path.join(d, '.route.json'), 'utf8')).linkable, true);
+
+  const root = tmp();
+  put(root, 'app/admin/route.ts', 'export function GET(){}');
+  put(root, 'app/admin/.route.json', JSON.stringify({ ...base, version: 1, linkable: true, reason: { source: 'heuristic' }, gate: { type: 'sso' } }));
+  assert.ok(check(root).findings.some((f) => f.type === 'linkable-not-approved'));
+  put(root, 'app/admin/.route.json', JSON.stringify({ ...base, version: 1, linkable: true, reason: { source: 'user' }, gate: { type: 'sso' } }));
+  assert.ok(!check(root).findings.some((f) => f.type === 'linkable-not-approved'));
+});
