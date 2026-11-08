@@ -58,7 +58,8 @@ Practical steps for using security-sidecar. For how it works inside see [ARCHITE
 2. The list is generated from `guidelines/core.md` into `plugins/security-sidecar/hooks/security-reminder.txt`. After editing a rule run `npm run guidelines`; `npm test` fails if the file is stale.
 3. It costs a small amount of context per session. To turn it off, set `"guidelines": false` in `.security-sidecar.config.json`. The route hooks and skills keep working.
 4. It is advice for the agent, not a control. It never says code is secure, and it does not stop code that ignores the rules. Keep code review and the `check` lint in place.
-5. If the agent seems to ignore it, ask it to apply the `secure-functions` skill explicitly for that change.
+5. Informal test (2026-11-08, headless Claude Code, one prompt: an Express `DELETE /files/:name` handler, five runs each way): with the plugin all five runs flagged missing authentication, limited the file-name format and deleted regular files only; without it none did. Path traversal was handled in both. None of the plugin runs added a real authentication check, only a TODO. One task and ten runs, so it shows the reminder has an effect, not how large it is.
+6. If the agent seems to ignore it, ask it to apply the `secure-functions` skill explicitly for that change.
 
 ### C. A route the tool is unsure about
 1. You are asked. Pick **Secured** unless the page is meant for search engines.

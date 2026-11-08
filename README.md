@@ -53,7 +53,7 @@ Sidecar naming: `.route.json` where the directory is the route (Next.js app rout
 
 ## Security reminder
 
-Once the plugin is installed, a session-start hook reminds the agent of the secure-coding rules (SG-1 to SG-14) for every piece of code it writes, not only routes. It costs a little context per session. To turn it off, set `"guidelines": false` in `.security-sidecar.config.json`. It is advice, not enforcement.
+Once the plugin is installed, a session-start hook reminds the agent of the secure-coding rules (SG-1 to SG-14) for every piece of code it writes, not only routes. It costs a little context per session. To turn it off, set `"guidelines": false` in `.security-sidecar.config.json`. It is advice, not enforcement. In a small informal test (five runs each way on one task) it made the agent flag missing authentication and constrain input where it otherwise did not; see the [playbook](docs/PLAYBOOK.md).
 
 ## Quiet mode
 
