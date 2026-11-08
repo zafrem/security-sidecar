@@ -3,10 +3,15 @@
   "version": "0.1.0",
   "description": "Records the protection intent of each web route in a .route.json sidecar file.",
   "license": "MIT",
-  "bin": { "security-sidecar": "bin/security-sidecar.js" },
+  "bin": {
+    "security-sidecar": "bin/security-sidecar.js"
+  },
   "scripts": {
     "bundle": "node scripts/bundle.js",
-    "test": "node --test \"test/*.test.js\""
+    "test": "node --test",
+    "listing": "node scripts/listing.js"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  }
 }
