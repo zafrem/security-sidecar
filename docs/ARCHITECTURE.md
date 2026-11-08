@@ -45,7 +45,7 @@ All logic lives in one dependency-free Node CLI plus one JSON schema. The Claude
 | --- | --- |
 | `routes.js` | Which files are routes (globs), the URL a file serves, HTTP methods in source, sidecar file naming, directory walk, `adminPaths` matching, config loading |
 | `analyze.js` | Classification: exposure, cache, indexing, confidence, options, `needsGate`, `existing` sidecar info |
-| `guidance.js` | Framework-specific implementation text for each exposure (text only) |
+| `guidance.js` | Framework-specific implementation text for each exposure, plus the input-handling checklist (text only) |
 | `validate.js` | Minimal JSON Schema validator for the subset the schema uses |
 | `secrets.js` | Secret-pattern detection for every string value and key |
 | `save.js` | Merge with existing sidecar, validate, secret scan, canonical key order, write |
@@ -73,7 +73,7 @@ A sidecar describes one route, per HTTP method. Exposure, caching and enforcemen
 2. Detect methods from `export function GET`, `router.post(`, `@router.get(` and similar. Unknown means `*`.
 3. Classify each method (first match wins): internal segments, then admin (literal or `adminPaths`), then auth segments (`api`, `user`, `cart`, `login` ...), then mutating methods, then public content paths. Anything else is **low confidence and suggests the secured side**.
 4. The whole file takes the most restrictive method. Confidence is `low` if any method is low.
-5. Output includes `policy` (ready to save), `options` (only when low), `guidance`, and for admin routes `needsGate` and `gateOptions`.
+5. Output includes `quiet` (from config), `policy` (ready to save), `options` (only when low), `guidance`, and for admin routes `needsGate` and `gateOptions`.
 
 ### 5.2 save
 
@@ -108,6 +108,10 @@ Only `mode: enforce` sidecars are used. Compile stops (exit 1) if any still has 
 ### 5.5 Link guard
 
 `links.js` builds the protected set (admin, gated, or internal, and not `linkable`). A file is excluded if it belongs to that route itself, is a config file (`*.config.*`, `middleware.*`) or a test. Matching is textual: the route's static prefix as a whole path token, or a full URL ending in it. The hook runs it on any non-route file the agent writes; `check` runs it on the whole repo.
+
+### 5.6 Secure-coding rules
+
+Two parts, both advisory. `guidance.js` appends `Input:` lines to the `analyze` result for handlers and dynamic pages, in TypeScript or Python terms. The `secure-functions` skill holds the full rule set and examples and triggers on any function that takes external input. There is no lint: the tool has no parser, so detecting `any` or untyped parameters would be text matching with false positives.
 
 ## 6. Security design
 

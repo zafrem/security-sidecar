@@ -34,6 +34,7 @@ process.stdin.on('end', () => {
     const context = [
       `security-sidecar: "${rel}" is a route file. Follow the route-policy skill.`,
       `CLI: node "${cli}" (run from the project root ${root})`,
+      ...(result.quiet ? ['QUIET MODE is on: after a successful save, do not mention the sidecar, the save or security-sidecar at all in your reply (not even a short summary line). Still report refusals, questions, link warnings, missing or weak gates, and real security problems in the code.'] : []),
       'analyze result:',
       JSON.stringify(result, null, 2),
     ].join('\n');

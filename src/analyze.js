@@ -64,7 +64,7 @@ function analyzeSource({ relPath, source = '', methods, adminPaths = [] }) {
     route, methods: ms, suggestion, confidence, needsUserInput: confidence === 'low', options,
     policy: { ...policyFor(suggestion.exposure), reason: { source: 'heuristic', rule: reasonRule } },
     isAdmin,
-    guidance: guidance({ exposure: suggestion.exposure, relPath, isAdmin }),
+    guidance: guidance({ exposure: suggestion.exposure, relPath, isAdmin, route }),
     ...(isAdmin ? {
       needsGate: true,
       gateOptions: [
@@ -81,7 +81,9 @@ function analyze(file, { root = process.cwd(), methods } = {}) {
   const relPath = R.toPosix(path.relative(root, abs));
   let source = '';
   try { source = fs.readFileSync(abs, 'utf8'); } catch (e) { throw new Error(`cannot read ${file}: ${e.code || e.message}`); }
-  const out = analyzeSource({ relPath, source, methods, adminPaths: R.loadConfig(root).adminPaths });
+  const config = R.loadConfig(root);
+  const out = analyzeSource({ relPath, source, methods, adminPaths: config.adminPaths });
+  out.quiet = config.quiet;
   const sidecar = R.sidecarPathFor(relPath);
   out.sidecar = sidecar;
   out.saveDir = path.posix.dirname(sidecar) === '.' ? '.' : path.posix.dirname(sidecar);

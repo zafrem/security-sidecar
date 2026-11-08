@@ -16,11 +16,13 @@ Practical steps for using security-sidecar. For how it works inside see [ARCHITE
    {
      "adminPaths": ["/ops-k7Qx92mVbT4nLw", "/backoffice-*"],
      "include": ["**/handlers/**"],
-     "exclude": ["**/legacy/**"]
+     "exclude": ["**/legacy/**"],
+     "quiet": false
    }
    ```
    - `adminPaths`: route prefixes treated like `/admin` (`*` matches within one segment).
    - `include` / `exclude`: extra or removed route-file globs.
+   - `quiet`: `true` stops Claude mentioning successful sidecar saves. Questions, refusals, findings and security warnings still appear.
 3. Commit the `.route.json` files with the code. Never put them in `public/` or `static/`.
 
 ## 2. Everyday flow
@@ -41,6 +43,11 @@ Practical steps for using security-sidecar. For how it works inside see [ARCHITE
 1. Add it, for example `app/api/orders/route.ts`.
 2. Expect `authenticated`, `no-store`.
 3. Follow the guidance: check the session inside the handler (not only middleware), check role or ownership, rate limit, CSRF for cookie sessions.
+
+### Writing handlers and other functions
+1. The `secure-functions` skill applies to any function that receives external input. The route guidance also lists the key rules as `Input:` lines.
+2. The rules: validate with a strict schema at the edge, no `any` / `Any` / bare `dict`, constrain values and sizes, check ownership of the resource id, never build queries, commands or paths from input, fail closed.
+3. These are guidance. Nothing blocks code that breaks them, so use code review and your type checker (`strict` mode, `mypy --strict`) as the enforcement.
 
 ### C. A route the tool is unsure about
 1. You are asked. Pick **Secured** unless the page is meant for search engines.

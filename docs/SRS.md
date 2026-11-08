@@ -159,6 +159,8 @@ The must-have features of v1 (P0) are detection, classification suggestions, que
 | FR-2.4 | Suggest `cache` and `indexing` only when there is a signal; otherwise leave them empty. | P0 |
 | FR-2.5 | Adjust confidence using authentication signals in the source (session checks, middleware decorators). | P2 |
 | FR-2.7 | Every `analyze` result includes `guidance`: framework-specific implementation steps for the suggested exposure (public: caching, metadata, sitemap for SEO; secured: auth check, `no-store`, `noindex`, rate limiting; internal: network restriction). Text only; the tool never edits route source. | P0 |
+| FR-2.8 | `analyze` guidance includes an input-handling checklist (strict schema validation, no free types, value and size constraints, ownership check, no input-built queries, commands or paths) for route handlers and dynamic pages, in the language of the detected framework (TypeScript or Python). A `secure-functions` skill carries the full rules for any function that receives external input. Guidance only; not enforced. | P1 |
+| FR-2.9 | `quiet: true` in `.security-sidecar.config.json` (default off) silences only the confirmation line after a successful save. `analyze` reports `quiet`, and the hook repeats the instruction in its context. Refusals, questions, `check` findings, link warnings and code security problems are never silenced. | P1 |
 | FR-2.6 | `adminPaths` in `.security-sidecar.config.json` lists route prefixes (`*` matches within one segment) that are treated like `/admin`: suggested as `authenticated`, `no-store`, `noindex` with `high` confidence, so renamed admin paths do not prompt. | P1 |
 
 ### 4.3 User questions

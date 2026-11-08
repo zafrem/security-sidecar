@@ -19,11 +19,12 @@ A hook runs `analyze` whenever you write or edit a route file and passes you its
 5. **`needsGate` is true (admin route):** after the exposure is settled, ask the user which extra gate to use, with AskUserQuestion, from `gateOptions` (passphrase of 8+ characters, SSO/MFA, or none). Save the chosen `gate` object together with the policy (`"gate": {"type": "passphrase", "minLength": 8}`). A passphrase is only ever recorded as a type and a minimum length; never ask for it, print it or store it.
 6. **Guidance:** summarize the `guidance` lines for the user in a few bullets (public routes: SEO and caching; secured routes: auth and headers; admin: the gate). Offer to implement the measures in the route code. Only edit route code if the user agrees, as a normal coding task, using an env var for any passphrase.
 7. **Exit code 2 from `save`:** it refused (schema error or secret-like value). Fix the policy and retry. Never work around a secret rejection.
-8. Mention in one short line what was recorded (route, exposure). Do not paste JSON back at the user.
+8. **Confirmation line.** After a successful save, mention in one short line what was recorded (route, exposure). Do not paste JSON back at the user. If the `analyze` result has `"quiet": true`, say nothing about a successful save. `quiet` silences only that confirmation. Always still report: a refused `save`, any question to the user, an `admin-path-exposed` link, a missing or weak gate, and anything that looks like a security problem in code you wrote or noticed.
 
 ## Rules
 
 - Never add a link, nav item, sitemap entry or robots.txt line pointing to an admin, gated or internal route. If the hook reports such a reference, remove it. A request that merely mentions the link ("add an Admin link to the nav") is not approval to expose the route. Before keeping any such link, ask the user with AskUserQuestion, stating that the link makes the hidden admin URL visible to every visitor and that the options are: remove the link (recommended), or keep it. Only if they choose to keep it, run `save` with `"linkable": true` and `"reason": {"source": "user"}`. Never edit a sidecar by hand to set `linkable`; `save` rejects it without user approval and `check` flags it.
+- When you write or change the handler itself, also follow the `secure-functions` skill (strict input validation, no free types, ownership checks).
 - Prefer the conservative side. When unsure, `authenticated` or `unclassified` beats `public`.
 - Never put keys, tokens, passwords or connection strings in any field, including `notes`.
 - Never edit route source code for this. Touch only sidecars.

@@ -228,3 +228,37 @@ test('linkable needs user approval: save refuses, check flags hand edits', () =>
   put(root, 'app/admin/.route.json', JSON.stringify({ ...base, version: 1, linkable: true, reason: { source: 'user' }, gate: { type: 'sso' } }));
   assert.ok(!check(root).findings.some((f) => f.type === 'linkable-not-approved'));
 });
+
+test('guidance includes an input checklist for handlers, per language', () => {
+  const next = analyzeSource({ relPath: 'app/api/orders/route.ts', source: 'export async function POST(){}' });
+  assert.ok(next.guidance.some((g) => /^Input:.*zod/.test(g)));
+  assert.ok(next.guidance.some((g) => /^Input:.*ownership/.test(g)));
+  const py = analyzeSource({ relPath: 'routers/orders.py', source: '@router.post("/x")\ndef f(): pass' });
+  assert.ok(py.guidance.some((g) => /pydantic/.test(g)));
+  assert.ok(!analyzeSource({ relPath: 'app/blog/page.tsx', source: '' }).guidance.some((g) => /^Input:/.test(g)), 'static page has no inputs');
+  assert.ok(analyzeSource({ relPath: 'app/blog/[slug]/page.tsx', source: '' }).guidance.some((g) => /^Input:/.test(g)), 'dynamic page has params');
+});
+
+test('quiet config is reported by analyze and defaults to off', () => {
+  const { analyze } = require('../src/analyze');
+  const root = tmp();
+  put(root, 'app/api/x/route.ts', 'export async function POST(){}');
+  assert.strictEqual(analyze('app/api/x/route.ts', { root }).quiet, false);
+  put(root, '.security-sidecar.config.json', JSON.stringify({ quiet: true }));
+  assert.strictEqual(analyze('app/api/x/route.ts', { root }).quiet, true);
+  put(root, '.security-sidecar.config.json', JSON.stringify({ quiet: 'yes' }));
+  assert.strictEqual(analyze('app/api/x/route.ts', { root }).quiet, false, 'only boolean true counts');
+  // quiet never hides findings
+  put(root, 'app/api/x/route.ts', 'export async function POST(){}');
+  assert.ok(check(root).findings.some((f) => f.type === 'missing'));
+});
+
+test('hook carries the quiet-mode instruction only when quiet is on', () => {
+  const hook = path.join(__dirname, '..', 'plugins', 'security-sidecar', 'hooks', 'post-tool-use.js');
+  const root = tmp();
+  put(root, 'app/api/x/route.ts', 'export async function POST(){}');
+  const run = () => JSON.parse(spawnSync('node', [hook], { input: JSON.stringify({ cwd: root, tool_input: { file_path: path.join(root, 'app/api/x/route.ts') } }), encoding: 'utf8' }).stdout).hookSpecificOutput.additionalContext;
+  assert.ok(!/QUIET MODE/.test(run()));
+  put(root, '.security-sidecar.config.json', JSON.stringify({ quiet: true }));
+  assert.match(run(), /QUIET MODE is on/);
+});

@@ -28,7 +28,8 @@ Records the protection intent of each web route in a `.route.json` sidecar file 
 7) Secret rejection: keys, tokens, passwords and connection strings are refused before anything is written.
 8) Safe sidecars: schema validation, no unknown fields, warning for sidecars in `public/` or `static/`, and a warning that `routes-manifest.json` lists admin paths.
 9) Your edits are kept: `save` never overwrites your notes, your chosen values or your `gate` and `linkable` settings.
-10) Honest defaults: annotate mode records intent only and blocks nothing, and `check` says so.
+10) Secure function rules: the `secure-functions` skill and the route guidance tell the agent to validate every input with a strict schema, avoid free types (`any`, `Any`, bare `dict`), constrain values and sizes, check resource ownership, and never build queries, commands or paths from input. Guidance only; nothing is enforced.
+11) Honest defaults: annotate mode records intent only and blocks nothing, and `check` says so.
 
 ## Install (Claude Code)
 
@@ -48,6 +49,10 @@ Local testing: `/plugin marketplace add ./security-sidecar`.
 5. Opt in: `/security-sidecar:compile nginx` turns `mode: enforce` sidecars into `routes-manifest.json` and an nginx config.
 
 Sidecar naming: `.route.json` where the directory is the route (Next.js app router); `<name>.route.json` where one directory holds many route files.
+
+## Quiet mode
+
+By default Claude mentions in one line when it saves a sidecar. To turn that off, set `"quiet": true` in `.security-sidecar.config.json`. Quiet mode silences only the success confirmation. Questions, refusals, `check` findings, link warnings and security problems in the code are always reported.
 
 ## Admin pages
 
