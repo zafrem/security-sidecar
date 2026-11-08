@@ -13,3 +13,4 @@ First version. Not yet tagged or released.
 - Admin protection: `adminPaths`, extra gate prompt, link detection with user approval for `linkable`.
 - Risky-code lint for `eval`, exec and string-built SQL, with reviewable suppressions.
 - `quiet` option for the save confirmation.
+- Common secure-coding guidelines (SG-1 to SG-14, TypeScript, Python, Go and Java notes) generated into the `secure-functions` skill and `adapters/` for `AGENTS.md`, Cursor and Gemini.

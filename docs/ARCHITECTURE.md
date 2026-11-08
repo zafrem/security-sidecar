@@ -36,6 +36,9 @@ All logic lives in one dependency-free Node CLI plus one JSON schema. The Claude
 | `plugins/security-sidecar/cli/` | **Generated copy** of `bin/`, `src/`, `schema/` (see 7) |
 | `.claude-plugin/marketplace.json` | Lets users run `/plugin marketplace add` |
 | `scripts/bundle.js` | Copies the core into the plugin |
+| `guidelines/` | Single source of the secure-coding guidelines (language-neutral core and per-language notes) |
+| `scripts/guidelines.js` | Generates the skill and the assistant adapters from `guidelines/` |
+| `adapters/` | Generated guideline files for other assistants (`AGENTS.md`, Cursor, Gemini) and how to install them |
 | `test/core.test.js` | Unit tests, plus hook and bundle-freshness tests |
 | `examples/nextjs/` | Sample app with generated sidecars |
 
@@ -113,7 +116,7 @@ Only `mode: enforce` sidecars are used. Compile stops (exit 1) if any still has 
 
 ### 5.6 Secure-coding rules
 
-Two parts, both advisory. `guidance.js` appends `Input:` lines to the `analyze` result for handlers and dynamic pages, in TypeScript or Python terms. The `secure-functions` skill holds the full rule set and examples and triggers on any function that takes external input. The only code lint is `lint.js` (`eval`, exec, string-built SQL). It does not check types such as `any`: the tool has no parser, and that would be mostly false positives.
+Two parts, both advisory. `guidance.js` appends `Input:` lines to the `analyze` result for handlers and dynamic pages, in TypeScript or Python terms. The full rule set lives in one place, `guidelines/` (`core.md` plus `languages/*.md`), and `scripts/guidelines.js` generates from it the `secure-functions` skill (triggers on any function that takes external input), an `AGENTS.md` block, a Cursor rule and a `GEMINI.md` block under `adapters/`. A test fails if a generated file differs from the source. The only code lint is `lint.js` (`eval`, exec, string-built SQL). It does not check types such as `any`: the tool has no parser, and that would be mostly false positives.
 
 ## 6. Security design
 

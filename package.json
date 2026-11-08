@@ -9,7 +9,8 @@
   "scripts": {
     "bundle": "node scripts/bundle.js",
     "test": "node --test",
-    "listing": "node scripts/listing.js"
+    "listing": "node scripts/listing.js",
+    "guidelines": "node scripts/guidelines.js"
   },
   "engines": {
     "node": ">=18"

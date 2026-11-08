@@ -312,3 +312,32 @@ test('suppressed risky lines are not hidden: check lists them for review', () =>
   assert.match(require('../src/check').format(r), /suppressed.*lib\/a\.ts:2 \[eval\]/);
   assert.strictEqual(check(root, { strict: true }).exitCode, 0, 'suppressed lines do not fail strict');
 });
+
+test('generated guideline files match the single source', () => {
+  const { build } = require('../scripts/guidelines');
+  const out = build();
+  assert.deepStrictEqual(Object.keys(out).sort(), [
+    'adapters/agents/AGENTS.md', 'adapters/cursor/security-sidecar.mdc', 'adapters/gemini/GEMINI.md',
+    'plugins/security-sidecar/skills/secure-functions/SKILL.md',
+  ]);
+  for (const [rel, content] of Object.entries(out)) {
+    assert.strictEqual(fs.readFileSync(path.join(__dirname, '..', rel), 'utf8'), content, `${rel} is out of date; run npm run guidelines`);
+  }
+});
+
+test('guidelines: every rule and language is in every output, with valid front matter', () => {
+  const { build } = require('../scripts/guidelines');
+  const core = fs.readFileSync(path.join(__dirname, '..', 'guidelines', 'core.md'), 'utf8');
+  const ids = [...core.matchAll(/\*\*(SG-\d+)\./g)].map((m) => m[1]);
+  assert.ok(ids.length >= 14);
+  assert.deepStrictEqual(ids, ids.map((_, i) => `SG-${i + 1}`), 'ids are sequential');
+  for (const [rel, content] of Object.entries(build())) {
+    for (const id of ids) assert.ok(content.includes(`**${id}.`), `${rel} lacks ${id}`);
+    for (const lang of ['TypeScript / JavaScript', 'Python', 'Go', 'Java']) assert.ok(content.includes(lang), `${rel} lacks ${lang}`);
+  }
+  const skill = build()['plugins/security-sidecar/skills/secure-functions/SKILL.md'];
+  assert.match(skill, /^---\nname: secure-functions\ndescription: [^\n]+\n---\n/);
+  const cursor = build()['adapters/cursor/security-sidecar.mdc'];
+  assert.match(cursor, /^---\ndescription: [^\n]+\nglobs: [^\n]+\nalwaysApply: false\n---\n/);
+  assert.match(build()['adapters/agents/AGENTS.md'], /<!-- BEGIN security-sidecar guidelines -->[\s\S]*<!-- END security-sidecar guidelines -->/);
+});

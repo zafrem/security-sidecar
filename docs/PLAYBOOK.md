@@ -45,9 +45,11 @@ Practical steps for using security-sidecar. For how it works inside see [ARCHITE
 3. Follow the guidance: check the session inside the handler (not only middleware), check role or ownership, rate limit, CSRF for cookie sessions.
 
 ### Writing handlers and other functions
-1. The `secure-functions` skill applies to any function that receives external input. The route guidance also lists the key rules as `Input:` lines.
-2. The rules: validate with a strict schema at the edge, no `any` / `Any` / bare `dict`, constrain values and sizes, check ownership of the resource id, never build queries, commands or paths from input, fail closed.
-3. These are guidance. Nothing blocks code that breaks them, so use code review and your type checker (`strict` mode, `mypy --strict`) as the enforcement.
+1. The `secure-functions` skill applies to any function that receives external input, in any of the supported languages. The route guidance also lists the key rules as `Input:` lines.
+2. The rules (SG-1 to SG-14) are in `guidelines/core.md`: validate with a strict schema at the edge, no free types, constrain values and sizes, check ownership, never build queries, commands or paths from input, keep secrets out of code and logs, fail closed. Language notes sit in `guidelines/languages/`.
+3. Using another assistant? Copy the generated file from `adapters/` (see `adapters/README.md`).
+4. To change or add a rule or language, edit `guidelines/` and run `npm run guidelines`.
+5. These are guidance. Nothing blocks code that breaks them, so use code review and your type checker (`strict` mode, `mypy --strict`) as the enforcement.
 
 ### C. A route the tool is unsure about
 1. You are asked. Pick **Secured** unless the page is meant for search engines.

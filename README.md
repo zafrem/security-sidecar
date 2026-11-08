@@ -28,7 +28,7 @@ Records the protection intent of each web route in a `.route.json` sidecar file 
 7) Secret rejection: keys, tokens, passwords and connection strings are refused before anything is written.
 8) Safe sidecars: schema validation, no unknown fields, warning for sidecars in `public/` or `static/`, and a warning that `routes-manifest.json` lists admin paths.
 9) Your edits are kept: `save` never overwrites your notes, your chosen values or your `gate` and `linkable` settings.
-10) Secure function rules: the `secure-functions` skill and the route guidance tell the agent to validate every input with a strict schema, avoid free types (`any`, `Any`, bare `dict`), constrain values and sizes, check resource ownership, and never build queries, commands or paths from input. Guidance only; nothing is enforced.
+10) Common secure-coding guidelines: 14 language-neutral rules (strict input validation, no free types, value constraints, ownership checks, no input-built queries or commands, safe secrets, crypto and errors) with notes for TypeScript, Python, Go and Java. One source in `guidelines/` is generated for Claude Code (skill), `AGENTS.md` (Codex and others), Cursor and Gemini. Guidance only; nothing is enforced. See [adapters/](adapters/README.md).
 11) Risky-code lint: `check` and the edit hook flag `eval`, `exec` / shell calls and string-built SQL in JavaScript, TypeScript and Python, with file and line. Reviewed lines can be marked `security-sidecar-ignore`; `check` still lists those for review.
 12) Honest defaults: annotate mode records intent only and blocks nothing, and `check` says so.
 
@@ -81,11 +81,16 @@ A hidden path is not protection. `check` warns about any admin or `internal` rou
 - `routes-manifest.json` lists admin and internal paths. Keep it out of public build output and deploy artifacts.
 - `save` refuses secret-like values (keys, tokens, connection strings).
 
+## Guidelines for any code assistant
+
+The same secure-coding rules are available outside Claude Code. Copy the file for your assistant from [`adapters/`](adapters/README.md): `AGENTS.md` (Codex and other agents), a Cursor rule, or `GEMINI.md`. They are generated from [`guidelines/`](guidelines), so edit the source and run `npm run guidelines`.
+
 ## Development
 
 ```
 npm test          # core + hook tests
 npm run bundle    # copy the CLI into plugins/security-sidecar/cli (commit the result)
+npm run guidelines  # regenerate the skill and adapters from guidelines/ (commit the result)
 ```
 
 Zero runtime dependencies; Node 18+.
