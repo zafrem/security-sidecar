@@ -51,6 +51,7 @@ All logic lives in one dependency-free Node CLI plus one JSON schema. The Claude
 | `save.js` | Merge with existing sidecar, validate, secret scan, canonical key order, write |
 | `check.js` | Repo-wide findings and exit code |
 | `links.js` | Finds references to protected routes in other files |
+| `lint.js` | Line-based lint for `eval`, exec / shell and string-built SQL, with a `security-sidecar-ignore` suppression |
 | `compile.js` | Collects `mode: enforce` sidecars into the manifest and calls a target |
 | `targets/nginx.js` | Renders the Nginx config |
 | `cli.js` | Argument parsing and JSON output for the four subcommands |
@@ -98,6 +99,7 @@ Walk the repo once, then compare the set of *expected* sidecars (from route file
 | `admin-no-gate` | Admin route without a `gate` |
 | `admin-path-exposed` | Another file references an admin, gated or internal route |
 | `linkable-not-approved` | `linkable: true` without `reason.source: user` |
+| `risky-code` | `eval`, exec / shell, or string-built SQL on a line (suppressed lines are listed separately and do not fail `--strict`) |
 
 Exit code: 0 in annotate mode; 1 if `--strict` is given or the finding belongs to an `enforce` sidecar.
 
@@ -111,7 +113,7 @@ Only `mode: enforce` sidecars are used. Compile stops (exit 1) if any still has 
 
 ### 5.6 Secure-coding rules
 
-Two parts, both advisory. `guidance.js` appends `Input:` lines to the `analyze` result for handlers and dynamic pages, in TypeScript or Python terms. The `secure-functions` skill holds the full rule set and examples and triggers on any function that takes external input. There is no lint: the tool has no parser, so detecting `any` or untyped parameters would be text matching with false positives.
+Two parts, both advisory. `guidance.js` appends `Input:` lines to the `analyze` result for handlers and dynamic pages, in TypeScript or Python terms. The `secure-functions` skill holds the full rule set and examples and triggers on any function that takes external input. The only code lint is `lint.js` (`eval`, exec, string-built SQL). It does not check types such as `any`: the tool has no parser, and that would be mostly false positives.
 
 ## 6. Security design
 
@@ -143,3 +145,4 @@ Plugin installs copy only `plugins/security-sidecar/`, so the CLI is bundled ins
 - One target (Nginx). Next.js middleware is planned.
 - No verification that the recorded enforcement exists.
 - Link detection is text matching; paths built at runtime are missed.
+- The lint is single-line text matching: it misses SQL split across lines or built in a variable first, and cannot tell a constant from user input.

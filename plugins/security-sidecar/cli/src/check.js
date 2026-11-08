@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const R = require('./routes');
 const { protectedRoutes, scanFile } = require('./links');
+const { lintFile } = require('./lint');
 const { validate } = require('./validate');
 
 const NETWORK_RESTRICTIONS = ['ip-allowlist', 'mtls'];
@@ -53,12 +54,18 @@ function check(root = process.cwd(), { strict = false } = {}) {
   const prot = protectedRoutes(docs, config.adminPaths);
   if (prot.length) for (const rel of allFiles) findings.push(...scanFile(root, rel, prot));
 
+  const suppressed = [];
+  for (const rel of allFiles) {
+    for (const h of lintFile(root, rel, { includeSuppressed: true })) (h.suppressed ? suppressed : findings).push(h);
+  }
+
   const enforcing = (f) => docs.get(f.file)?.mode === 'enforce';
   const failing = findings.filter((f) => strict || enforcing(f));
   findings.sort((a, b) => (a.file < b.file ? -1 : a.file > b.file ? 1 : a.type < b.type ? -1 : 1));
   return {
     ok: failing.length === 0, exitCode: failing.length ? 1 : 0, strict,
     routes: expected.size, sidecars: existing.length, findings,
+    suppressed: suppressed.map(({ file, line, rule }) => ({ file, line, rule })),
     summary: findings.length ? `${findings.length} finding(s)` : 'all routes have valid sidecars',
   };
 }
@@ -66,8 +73,10 @@ function check(root = process.cwd(), { strict = false } = {}) {
 function format(r) {
   const lines = r.findings.map((f) => `  [${f.type}] ${f.file}: ${f.message}`);
   const head = `security-sidecar check: ${r.routes} route(s), ${r.sidecars} sidecar(s) - ${r.summary}`;
-  const tail = r.findings.length && !r.strict && r.exitCode === 0
-    ? '\n(annotate mode: warnings only, exit 0. Use --strict to fail on findings.)' : '';
+  const sup = r.suppressed.length
+    ? `\n${r.suppressed.length} risky-code line(s) suppressed with security-sidecar-ignore; review them: ${r.suppressed.map((s) => `${s.file}:${s.line} [${s.rule}]`).join(', ')}` : '';
+  const tail = sup + (r.findings.length && !r.strict && r.exitCode === 0
+    ? '\n(annotate mode: warnings only, exit 0. Use --strict to fail on findings.)' : '');
   return [head, ...lines].join('\n') + tail;
 }
 

@@ -117,9 +117,13 @@ Adjust the path to where the CLI lives in your project.
 | `admin-no-network-restriction` | Add an IP allowlist, VPN or mTLS, then record it in `enforcement.via` |
 | `admin-no-gate` | Add SSO/MFA or a passphrase gate and record it in `gate` |
 | `admin-path-exposed` | Remove the link, sitemap or `robots.txt` entry, or approve it as in scenario E |
+| `risky-code` | Replace `eval` with a parser or lookup table, shell calls with an argument-list API, and string-built SQL with parameterized queries. If reviewed and safe, add a `security-sidecar-ignore` comment with the reason |
 | `linkable-not-approved` | Confirm with the owner, then re-save with `reason.source: user`, or remove `linkable` |
 
 `save` exits 2 on a schema error, a secret-like value, a sidecar name that is not allowed, or an unapproved `linkable`. Nothing is written in that case.
+
+### Reviewing suppressions
+`check` lists every line suppressed with `security-sidecar-ignore` under `suppressed`. An agent can add that comment, so treat each one as a review item in pull requests and check the stated reason.
 
 ## 6. Rules of thumb
 

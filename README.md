@@ -29,7 +29,8 @@ Records the protection intent of each web route in a `.route.json` sidecar file 
 8) Safe sidecars: schema validation, no unknown fields, warning for sidecars in `public/` or `static/`, and a warning that `routes-manifest.json` lists admin paths.
 9) Your edits are kept: `save` never overwrites your notes, your chosen values or your `gate` and `linkable` settings.
 10) Secure function rules: the `secure-functions` skill and the route guidance tell the agent to validate every input with a strict schema, avoid free types (`any`, `Any`, bare `dict`), constrain values and sizes, check resource ownership, and never build queries, commands or paths from input. Guidance only; nothing is enforced.
-11) Honest defaults: annotate mode records intent only and blocks nothing, and `check` says so.
+11) Risky-code lint: `check` and the edit hook flag `eval`, `exec` / shell calls and string-built SQL in JavaScript, TypeScript and Python, with file and line. Reviewed lines can be marked `security-sidecar-ignore`; `check` still lists those for review.
+12) Honest defaults: annotate mode records intent only and blocks nothing, and `check` says so.
 
 ## Install (Claude Code)
 

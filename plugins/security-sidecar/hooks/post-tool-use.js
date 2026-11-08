@@ -6,6 +6,13 @@ const path = require('path');
 const R = require('../cli/src/routes');
 const { analyze } = require('../cli/src/analyze');
 const L = require('../cli/src/links');
+const { lintFile } = require('../cli/src/lint');
+
+const out = (msg) => process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: msg } }));
+const lintText = (hits) => hits.length
+  ? ['security-sidecar lint: risky code in the file you just wrote. Fix it now unless the user explicitly needs it (then add a `security-sidecar-ignore` comment and tell the user why).',
+      ...hits.map((h) => `- ${h.file}:${h.line} [${h.rule}] ${h.message}`)].join('\n')
+  : ''
 
 let input = '';
 process.stdin.on('data', (d) => (input += d));
@@ -18,14 +25,15 @@ process.stdin.on('end', () => {
     const rel = R.toPosix(path.relative(root, path.resolve(root, file)));
     if (rel.startsWith('..')) return;
     const config = R.loadConfig(root);
+    const lint = lintText(lintFile(root, rel));
     if (!R.isRouteFile(rel, config)) {
       // Not a route: make sure it does not link to an admin / gated / internal route.
       const hits = L.scanFile(root, rel, L.protectedRoutes(L.loadSidecars(root), config.adminPaths));
       if (hits.length) {
         const msg = ['security-sidecar: this file references protected route(s). Remove the link. Only if the user confirms it should stay: ask them first with AskUserQuestion (say it makes the hidden URL visible to every visitor), then run `save` with "linkable": true and reason.source "user". Never edit the sidecar by hand and never decide this yourself, even if the user\'s request mentioned the link.',
           ...hits.map((h) => `- ${h.file}:${h.line} -> ${h.route}`)].join('\n');
-        process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: msg } }));
-      }
+        out([msg, lint].filter(Boolean).join('\n\n'));
+      } else if (lint) out(lint);
       return;
     }
 
@@ -37,8 +45,9 @@ process.stdin.on('end', () => {
       ...(result.quiet ? ['QUIET MODE is on: after a successful save, do not mention the sidecar, the save or security-sidecar at all in your reply (not even a short summary line). Still report refusals, questions, link warnings, missing or weak gates, and real security problems in the code.'] : []),
       'analyze result:',
       JSON.stringify(result, null, 2),
+      ...(lint ? ['', lint] : []),
     ].join('\n');
-    process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: context } }));
+    out(context);
   } catch {
     // Never block or disturb the agent because of a hook failure.
   }

@@ -120,7 +120,7 @@ test('plugin hook emits context for route files only, and the bundle is current'
   const hit = JSON.parse(run('app/api/login/route.ts').stdout);
   assert.match(hit.hookSpecificOutput.additionalContext, /"route": "\/api\/login"/);
   assert.strictEqual(run('lib/util.ts').stdout, '');
-  for (const f of ['src/analyze.js', 'src/save.js', 'src/check.js', 'src/compile.js', 'src/routes.js', 'src/targets/nginx.js', 'src/links.js', 'src/guidance.js', 'schema/route.schema.json']) {
+  for (const f of ['src/analyze.js', 'src/save.js', 'src/check.js', 'src/compile.js', 'src/routes.js', 'src/targets/nginx.js', 'src/links.js', 'src/lint.js', 'src/guidance.js', 'schema/route.schema.json']) {
     assert.strictEqual(fs.readFileSync(path.join(__dirname, '..', 'plugins/security-sidecar/cli', f), 'utf8'), fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), `${f} out of date; run npm run bundle`);
   }
 });
@@ -261,4 +261,54 @@ test('hook carries the quiet-mode instruction only when quiet is on', () => {
   assert.ok(!/QUIET MODE/.test(run()));
   put(root, '.security-sidecar.config.json', JSON.stringify({ quiet: true }));
   assert.match(run(), /QUIET MODE is on/);
+});
+
+test('lint flags eval, exec and string-built SQL, with few false positives', () => {
+  const { lintSource } = require('../src/lint');
+  const rules = (rel, src) => lintSource(rel, src).map((h) => `${h.line}:${h.rule}`);
+  // JS / TS: should flag
+  assert.deepStrictEqual(rules('a.ts', 'const r = eval(input)\nconst f = new Function("x", body)'), ['1:eval', '2:eval']);
+  assert.deepStrictEqual(rules('a.ts', 'import { exec } from "child_process"\nexec(`ls ${dir}`)'), ['2:exec']);
+  assert.deepStrictEqual(rules('a.ts', 'cp.execSync(cmd)\nspawn("a", [], { shell: true })'), ['1:exec', '2:exec']);
+  assert.deepStrictEqual(rules('a.ts', 'db.query(`SELECT * FROM users WHERE id = ${id}`)'), ['1:sql-string']);
+  assert.deepStrictEqual(rules('a.ts', 'db.query("SELECT * FROM users WHERE id = " + id)'), ['1:sql-string']);
+  assert.deepStrictEqual(rules('a.ts', 'db.query("DELETE FROM t WHERE id = $1", [id])'), []);
+  // JS / TS: should not flag
+  assert.deepStrictEqual(rules('a.ts', '/\\d+/.exec(s)\nawait page.evaluate(fn)\nconst ev = obj.eval2()\n// eval(x) in a comment'), []);
+  assert.deepStrictEqual(rules('a.ts', 'exec(sql)'), [], 'bare exec without child_process import');
+  // Python
+  assert.deepStrictEqual(rules('a.py', 'x = eval(s)\nexec(code)\nos.system(cmd)\nsubprocess.run(c, shell=True)'), ['1:eval', '2:exec', '3:exec', '4:exec']);
+  assert.deepStrictEqual(rules('a.py', 'cur.execute(f"SELECT * FROM t WHERE id = {i}")'), ['1:sql-string']);
+  assert.deepStrictEqual(rules('a.py', 'cur.execute("SELECT * FROM t WHERE id = %s" % i)\ncur.execute("UPDATE t SET a=1 WHERE id={}".format(i))'), ['1:sql-string', '2:sql-string']);
+  assert.deepStrictEqual(rules('a.py', 'cur.execute("SELECT * FROM t WHERE id = %s", (i,))\nast.literal_eval(s)\nre.compile(p).exec_x()'), []);
+  // suppression and skipped files
+  assert.deepStrictEqual(rules('a.ts', '// security-sidecar-ignore reviewed\nconst r = eval(trusted)\nconst q = eval(x) // security-sidecar-ignore'), []);
+  assert.deepStrictEqual(rules('a.test.ts', 'eval(x)'), []);
+  assert.deepStrictEqual(rules('README.md', 'eval(x)'), []);
+});
+
+test('check reports risky code with file and line; strict fails; hook warns', () => {
+  const root = tmp();
+  put(root, 'lib/run.ts', 'export const run = (c: string) => {\n  return eval(c)\n}');
+  const f = check(root).findings.filter((x) => x.type === 'risky-code');
+  assert.deepStrictEqual(f.map((x) => `${x.file}:${x.line}:${x.rule}`), ['lib/run.ts:2:eval']);
+  assert.strictEqual(check(root).exitCode, 0);
+  assert.strictEqual(check(root, { strict: true }).exitCode, 1);
+  const hook = path.join(__dirname, '..', 'plugins', 'security-sidecar', 'hooks', 'post-tool-use.js');
+  const run = (file) => spawnSync('node', [hook], { input: JSON.stringify({ cwd: root, tool_input: { file_path: path.join(root, file) } }), encoding: 'utf8' }).stdout;
+  assert.match(JSON.parse(run('lib/run.ts')).hookSpecificOutput.additionalContext, /lib\/run\.ts:2 \[eval\]/);
+  put(root, 'app/api/q/route.ts', 'export async function POST(r: Request){ return db.query(`SELECT * FROM t WHERE a = ${await r.text()}`) }');
+  const ctx = JSON.parse(run('app/api/q/route.ts')).hookSpecificOutput.additionalContext;
+  assert.match(ctx, /"route": "\/api\/q"/);
+  assert.match(ctx, /\[sql-string\]/);
+});
+
+test('suppressed risky lines are not hidden: check lists them for review', () => {
+  const root = tmp();
+  put(root, 'lib/a.ts', '// security-sidecar-ignore: reviewed\nconst r = eval(trusted)');
+  const r = check(root);
+  assert.strictEqual(r.findings.filter((f) => f.type === 'risky-code').length, 0);
+  assert.deepStrictEqual(r.suppressed, [{ file: 'lib/a.ts', line: 2, rule: 'eval' }]);
+  assert.match(require('../src/check').format(r), /suppressed.*lib\/a\.ts:2 \[eval\]/);
+  assert.strictEqual(check(root, { strict: true }).exitCode, 0, 'suppressed lines do not fail strict');
 });
