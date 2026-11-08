@@ -116,7 +116,7 @@ Only `mode: enforce` sidecars are used. Compile stops (exit 1) if any still has 
 
 ### 5.6 Secure-coding rules
 
-Two parts, both advisory. `guidance.js` appends `Input:` lines to the `analyze` result for handlers and dynamic pages, in TypeScript or Python terms. The full rule set lives in one place, `guidelines/` (`core.md` plus `languages/*.md`), and `scripts/guidelines.js` generates from it the `secure-functions` skill (triggers on any function that takes external input), an `AGENTS.md` block, a Cursor rule and a `GEMINI.md` block under `adapters/`. A test fails if a generated file differs from the source. The only code lint is `lint.js` (`eval`, exec, string-built SQL). It does not check types such as `any`: the tool has no parser, and that would be mostly false positives.
+Two parts, both advisory. `guidance.js` appends `Input:` lines to the `analyze` result for handlers and dynamic pages, in TypeScript or Python terms. The full rule set lives in one place, `guidelines/` (`core.md` plus `languages/*.md`), and `scripts/guidelines.js` generates from it the `secure-functions` skill (triggers on any function that takes external input), an `AGENTS.md` block, a Cursor rule and a `GEMINI.md` block under `adapters/`. A test fails if a generated file differs from the source. A `SessionStart` hook (`hooks/session-start.js`) prints the generated `hooks/security-reminder.txt` (a compact rule list) as `additionalContext`, unless `guidelines` is `false` in the config; errors are swallowed so a session never fails to start. The only code lint is `lint.js` (`eval`, exec, string-built SQL). It does not check types such as `any`: the tool has no parser, and that would be mostly false positives.
 
 ## 6. Security design
 

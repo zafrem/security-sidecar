@@ -18,6 +18,7 @@ Requires Node 18 or newer. The CLI is bundled in this plugin; nothing else is in
 | Part | What it does |
 | --- | --- |
 | Hook (`PostToolUse` on `Write` and `Edit`) | Runs route analysis on route files, and warns about links to admin routes and risky code (`eval`, exec, string-built SQL) in any edited file |
+| Hook (`SessionStart`) | Reminds the agent of the secure-coding rules for all code it writes; disable with `"guidelines": false` in `.security-sidecar.config.json` |
 | Skill `route-policy` | Saves clear classifications silently; asks you when unsure, for an admin gate, and before any link to a protected route is kept |
 | Skill `secure-functions` | Secure-coding rules for functions that take external input |
 | `/security-sidecar:check` | Finds missing, orphan, invalid and unclassified sidecars, exposed admin paths and risky code |

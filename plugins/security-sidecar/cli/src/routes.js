@@ -40,8 +40,8 @@ function escape(s) { return s.replace(/[.+^$()|[\]\\?]/g, '\\$&'); }
 function loadConfig(root) {
   try {
     const c = JSON.parse(fs.readFileSync(path.join(root, '.security-sidecar.config.json'), 'utf8'));
-    return { include: c.include || [], exclude: c.exclude || [], adminPaths: c.adminPaths || [], quiet: c.quiet === true };
-  } catch { return { include: [], exclude: [], adminPaths: [], quiet: false }; }
+    return { include: c.include || [], exclude: c.exclude || [], adminPaths: c.adminPaths || [], quiet: c.quiet === true, guidelines: c.guidelines !== false };
+  } catch { return { include: [], exclude: [], adminPaths: [], quiet: false, guidelines: true }; }
 }
 
 // True for the literal /admin segment or any route under a configured admin path.

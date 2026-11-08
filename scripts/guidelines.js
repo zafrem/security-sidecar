@@ -31,10 +31,24 @@ function body() {
   };
 }
 
+// One line per rule (the bold headline), for the always-on session reminder.
+function reminder() {
+  const heads = [...read('guidelines/core.md').matchAll(/\*\*(SG-\d+\.[^*]+)\*\*/g)].map((m) => `- ${m[1].trim()}`);
+  return [
+    'security-sidecar: apply these security rules to ALL code you write or change in this project, not only web routes.',
+    'Load the secure-functions skill for the details and the language notes.',
+    '',
+    ...heads,
+    '',
+    'If a rule conflicts with the request, do what is safe, say so briefly and offer the alternative. These rules are guidance: never claim code is secure or protected because you followed them.',
+  ].join('\n') + '\n';
+}
+
 function build() {
   const { text } = body();
   const marked = (title) => `<!-- BEGIN security-sidecar guidelines -->\n<!-- ${NOTE} -->\n\n${text}\n<!-- END security-sidecar guidelines -->\n`;
   return {
+    'plugins/security-sidecar/hooks/security-reminder.txt': reminder(),
     'plugins/security-sidecar/skills/secure-functions/SKILL.md':
       `---\nname: secure-functions\ndescription: ${DESCRIPTION}\n---\n\n<!-- ${NOTE} -->\n\n${text}`,
     'adapters/agents/AGENTS.md': marked(),

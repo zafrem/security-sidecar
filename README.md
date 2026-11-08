@@ -28,7 +28,7 @@ Records the protection intent of each web route in a `.route.json` sidecar file 
 7) Secret rejection: keys, tokens, passwords and connection strings are refused before anything is written.
 8) Safe sidecars: schema validation, no unknown fields, warning for sidecars in `public/` or `static/`, and a warning that `routes-manifest.json` lists admin paths.
 9) Your edits are kept: `save` never overwrites your notes, your chosen values or your `gate` and `linkable` settings.
-10) Common secure-coding guidelines: 14 language-neutral rules (strict input validation, no free types, value constraints, ownership checks, no input-built queries or commands, safe secrets, crypto and errors) with notes for TypeScript, Python, Go and Java. One source in `guidelines/` is generated for Claude Code (skill), `AGENTS.md` (Codex and others), Cursor and Gemini. Guidance only; nothing is enforced. See [adapters/](adapters/README.md).
+10) Common secure-coding guidelines: 14 language-neutral rules (strict input validation, no free types, value constraints, ownership checks, no input-built queries or commands, safe secrets, crypto and errors) with notes for TypeScript, Python, Go and Java. One source in `guidelines/` is generated for Claude Code (skill), `AGENTS.md` (Codex and others), Cursor and Gemini. In Claude Code a session-start hook also gives the agent a short reminder of the rules for all code it writes (turn off with `"guidelines": false`). Guidance only; nothing is enforced. See [adapters/](adapters/README.md).
 11) Risky-code lint: `check` and the edit hook flag `eval`, `exec` / shell calls and string-built SQL in JavaScript, TypeScript and Python, with file and line. Reviewed lines can be marked `security-sidecar-ignore`; `check` still lists those for review.
 12) Honest defaults: annotate mode records intent only and blocks nothing, and `check` says so.
 
@@ -50,6 +50,10 @@ Local testing: `/plugin marketplace add ./security-sidecar`.
 5. Opt in: `/security-sidecar:compile nginx` turns `mode: enforce` sidecars into `routes-manifest.json` and an nginx config.
 
 Sidecar naming: `.route.json` where the directory is the route (Next.js app router); `<name>.route.json` where one directory holds many route files.
+
+## Security reminder
+
+Once the plugin is installed, a session-start hook reminds the agent of the secure-coding rules (SG-1 to SG-14) for every piece of code it writes, not only routes. It costs a little context per session. To turn it off, set `"guidelines": false` in `.security-sidecar.config.json`. It is advice, not enforcement.
 
 ## Quiet mode
 

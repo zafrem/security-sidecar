@@ -318,7 +318,7 @@ test('generated guideline files match the single source', () => {
   const out = build();
   assert.deepStrictEqual(Object.keys(out).sort(), [
     'adapters/agents/AGENTS.md', 'adapters/cursor/security-sidecar.mdc', 'adapters/gemini/GEMINI.md',
-    'plugins/security-sidecar/skills/secure-functions/SKILL.md',
+    'plugins/security-sidecar/hooks/security-reminder.txt', 'plugins/security-sidecar/skills/secure-functions/SKILL.md',
   ]);
   for (const [rel, content] of Object.entries(out)) {
     assert.strictEqual(fs.readFileSync(path.join(__dirname, '..', rel), 'utf8'), content, `${rel} is out of date; run npm run guidelines`);
@@ -332,6 +332,7 @@ test('guidelines: every rule and language is in every output, with valid front m
   assert.ok(ids.length >= 14);
   assert.deepStrictEqual(ids, ids.map((_, i) => `SG-${i + 1}`), 'ids are sequential');
   for (const [rel, content] of Object.entries(build())) {
+    if (rel.endsWith('security-reminder.txt')) { for (const id of ids) assert.ok(content.includes(`- ${id}.`), `${rel} lacks ${id}`); continue; }
     for (const id of ids) assert.ok(content.includes(`**${id}.`), `${rel} lacks ${id}`);
     for (const lang of ['TypeScript / JavaScript', 'Python', 'Go', 'Java']) assert.ok(content.includes(lang), `${rel} lacks ${lang}`);
   }
@@ -340,4 +341,21 @@ test('guidelines: every rule and language is in every output, with valid front m
   const cursor = build()['adapters/cursor/security-sidecar.mdc'];
   assert.match(cursor, /^---\ndescription: [^\n]+\nglobs: [^\n]+\nalwaysApply: false\n---\n/);
   assert.match(build()['adapters/agents/AGENTS.md'], /<!-- BEGIN security-sidecar guidelines -->[\s\S]*<!-- END security-sidecar guidelines -->/);
+});
+
+test('session-start hook gives the security rules to the agent unless disabled', () => {
+  const hook = path.join(__dirname, '..', 'plugins', 'security-sidecar', 'hooks', 'session-start.js');
+  const root = tmp();
+  const run = () => spawnSync('node', [hook], { input: JSON.stringify({ cwd: root, hook_event_name: 'SessionStart' }), encoding: 'utf8' }).stdout;
+  const out = JSON.parse(run()).hookSpecificOutput;
+  assert.strictEqual(out.hookEventName, 'SessionStart');
+  const core = fs.readFileSync(path.join(__dirname, '..', 'guidelines', 'core.md'), 'utf8');
+  for (const id of [...core.matchAll(/\*\*(SG-\d+)\./g)].map((m) => m[1])) assert.ok(out.additionalContext.includes(id), `reminder lacks ${id}`);
+  assert.match(out.additionalContext, /ALL code/);
+  put(root, '.security-sidecar.config.json', JSON.stringify({ guidelines: false }));
+  assert.strictEqual(run(), '', 'opt-out prints nothing');
+  put(root, '.security-sidecar.config.json', '{ not json');
+  assert.ok(run().includes('SessionStart'), 'a broken config falls back to the default (on)');
+  const hooks = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'plugins', 'security-sidecar', 'hooks', 'hooks.json'), 'utf8')).hooks;
+  assert.ok(hooks.SessionStart && hooks.PostToolUse, 'both hooks are registered');
 });

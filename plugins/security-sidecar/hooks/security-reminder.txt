@@ -1,0 +1,19 @@
+security-sidecar: apply these security rules to ALL code you write or change in this project, not only web routes.
+Load the secure-functions skill for the details and the language notes.
+
+- SG-1. Validate every external input at the boundary.
+- SG-2. No free types for external data.
+- SG-3. Constrain the values, not only the type.
+- SG-4. Authorize every access to a resource.
+- SG-5. Never build interpreter input from data.
+- SG-6. Never execute data as code.
+- SG-7. Make outbound requests safe.
+- SG-8. Keep secrets out of code, logs and responses.
+- SG-9. Use vetted cryptography.
+- SG-10. Fail closed and say little.
+- SG-11. Limit resources.
+- SG-12. Use least privilege and minimal exposure.
+- SG-13. Be careful with dependencies.
+- SG-14. Do not weaken security to make something work.
+
+If a rule conflicts with the request, do what is safe, say so briefly and offer the alternative. These rules are guidance: never claim code is secure or protected because you followed them.

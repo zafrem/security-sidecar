@@ -17,12 +17,14 @@ Practical steps for using security-sidecar. For how it works inside see [ARCHITE
      "adminPaths": ["/ops-k7Qx92mVbT4nLw", "/backoffice-*"],
      "include": ["**/handlers/**"],
      "exclude": ["**/legacy/**"],
-     "quiet": false
+     "quiet": false,
+     "guidelines": true
    }
    ```
    - `adminPaths`: route prefixes treated like `/admin` (`*` matches within one segment).
    - `include` / `exclude`: extra or removed route-file globs.
    - `quiet`: `true` stops Claude mentioning successful sidecar saves. Questions, refusals, findings and security warnings still appear.
+   - `guidelines`: `false` turns off the session-start security reminder (see "Security reminder in every session" below). Default `true`.
 3. Commit the `.route.json` files with the code. Never put them in `public/` or `static/`.
 
 ## 2. Everyday flow
@@ -50,6 +52,13 @@ Practical steps for using security-sidecar. For how it works inside see [ARCHITE
 3. Using another assistant? Copy the generated file from `adapters/` (see `adapters/README.md`).
 4. To change or add a rule or language, edit `guidelines/` and run `npm run guidelines`.
 5. These are guidance. Nothing blocks code that breaks them, so use code review and your type checker (`strict` mode, `mypy --strict`) as the enforcement.
+
+### Security reminder in every session
+1. A `SessionStart` hook (on startup, resume, clear and compact) gives the agent a compact list of the SG rules, so they apply to **all** code it writes, not only routes and handlers.
+2. The list is generated from `guidelines/core.md` into `plugins/security-sidecar/hooks/security-reminder.txt`. After editing a rule run `npm run guidelines`; `npm test` fails if the file is stale.
+3. It costs a small amount of context per session. To turn it off, set `"guidelines": false` in `.security-sidecar.config.json`. The route hooks and skills keep working.
+4. It is advice for the agent, not a control. It never says code is secure, and it does not stop code that ignores the rules. Keep code review and the `check` lint in place.
+5. If the agent seems to ignore it, ask it to apply the `secure-functions` skill explicitly for that change.
 
 ### C. A route the tool is unsure about
 1. You are asked. Pick **Secured** unless the page is meant for search engines.
