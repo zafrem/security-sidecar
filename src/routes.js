@@ -6,7 +6,7 @@ const path = require('path');
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 const SKIP_DIRS = new Set(['node_modules', '.git', '.next', 'dist', 'build', 'out', 'venv', '.venv', '__pycache__', 'coverage', '.turbo']);
 const STATIC_DIRS = new Set(['public', 'static']);
-const SRC_EXT = /\.(?:[cm]?[jt]sx?|py)$/;
+const SRC_EXT = /\.(?:[cm]?[jt]sx?|py|go|java)$/;
 
 // Default route patterns (FR-1.1). Globs: ** any depth, * within a segment.
 const DEFAULT_PATTERNS = [
@@ -62,7 +62,7 @@ function isRouteFile(relPath, config = { include: [], exclude: [] }) {
   const p = toPosix(relPath);
   if (!SRC_EXT.test(p)) return false;
   const base = path.posix.basename(p);
-  if (/\.(test|spec)\.[^.]+$/.test(base) || /^(_app|_document|_error|__init__|conftest)\./.test(base)) return false;
+  if (/\.(test|spec)\.[^.]+$/.test(base) || /_test\.go$/.test(base) || /Test\.java$/.test(base) || /^(_app|_document|_error|__init__|conftest)\./.test(base)) return false;
   if (p.split('/').some((s) => SKIP_DIRS.has(s))) return false;
   if (config.exclude.some((g) => globToRegex(g).test(p))) return false;
   return [...DEFAULT_PATTERNS, ...config.include].some((g) => globToRegex(g).test(p));
@@ -87,7 +87,7 @@ function routeFromPath(relPath) {
   const stem = path.posix.basename(p).replace(SRC_EXT, '');
   let segs = path.posix.dirname(p).split('/').filter((s) => s !== '.');
   const anchor = Math.max(segs.lastIndexOf('app'), segs.lastIndexOf('pages'));
-  const frameworkRoot = anchor >= 0 && (/\.py$/.test(p) === false);
+  const frameworkRoot = anchor >= 0 && !/\.(?:py|go|java)$/.test(p);
   if (frameworkRoot) {
     segs = segs.slice(anchor + 1);
     if (stem !== 'route' && stem !== 'page' && stem !== 'index') segs.push(stem);
@@ -105,10 +105,14 @@ function detectMethods(source, relPath) {
   for (const m of METHODS) {
     if (new RegExp(`export\\s+(?:async\\s+)?(?:function|const|let)\\s+${m}\\b`).test(source)) found.add(m);
   }
-  const call = source.matchAll(/\b(?:app|router|route|api|bp|\w+Router)\s*\.\s*(get|post|put|patch|delete|head|options)\s*\(/g);
+  const call = source.matchAll(/\b(?:app|router|route|api|bp|r|mux|\w+Router)\s*\.\s*(get|post|put|patch|delete|head|options)\s*\(/gi);
   for (const x of call) found.add(x[1].toUpperCase());
-  const deco = source.matchAll(/@\s*\w+\s*\.\s*(get|post|put|patch|delete|head|options)\s*\(/g);
+  const deco = source.matchAll(/@\s*\w+\s*\.\s*(get|post|put|patch|delete|head|options)\s*\(/gi);
   for (const x of deco) found.add(x[1].toUpperCase());
+  const spring = source.matchAll(/@(Get|Post|Put|Patch|Delete)Mapping\b/g);
+  for (const x of spring) found.add(x[1].toUpperCase());
+  const goHttp = source.matchAll(/\bhttp\.Method(Get|Post|Put|Patch|Delete|Head|Options)\b/g);
+  for (const x of goHttp) found.add(x[1].toUpperCase());
   if (/(^|\/)page\.[^/]+$/.test(toPosix(relPath))) found.add('GET');
   return [...found].sort((a, b) => METHODS.indexOf(a) - METHODS.indexOf(b));
 }

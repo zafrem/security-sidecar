@@ -106,7 +106,15 @@ test('compile: enforce only, skips by via, refuses unclassified', () => {
   assert.match(conf, /location ~ \^\/b\/\[\^\/\]\+\$/);
   assert.match(conf, /limit_req_zone .* rate=10r\/m/);
   assert.ok(!conf.includes('/d'), 'annotate sidecars are not compiled');
-  assert.strictEqual(compile(root, 'nextjs').ok, false);
+  assert.strictEqual(compile(root, 'unknown-target').ok, false);
+  const nx = compile(root, 'nextjs');
+  assert.ok(nx.ok);
+  assert.strictEqual(nx.compiled, 2);
+  const nxMod = require(nx.target);
+  assert.strictEqual(nxMod.routePolicies.length, 2);
+  const cf = compile(root, 'cloudflare');
+  assert.ok(cf.ok);
+  assert.match(fs.readFileSync(cf.target, 'utf8'), /WAF block\/allowlist rule \(internal\):/);
   w('app/e/.route.json', { mode: 'enforce', route: '/e', methods: { GET: { exposure: 'unclassified' } } });
   assert.strictEqual(compile(root, 'nginx').code, 1);
 });
@@ -120,7 +128,7 @@ test('plugin hook emits context for route files only, and the bundle is current'
   const hit = JSON.parse(run('app/api/login/route.ts').stdout);
   assert.match(hit.hookSpecificOutput.additionalContext, /"route": "\/api\/login"/);
   assert.strictEqual(run('lib/util.ts').stdout, '');
-  for (const f of ['src/analyze.js', 'src/save.js', 'src/check.js', 'src/compile.js', 'src/routes.js', 'src/targets/nginx.js', 'src/links.js', 'src/lint.js', 'src/guidance.js', 'schema/route.schema.json']) {
+  for (const f of ['src/analyze.js', 'src/save.js', 'src/check.js', 'src/compile.js', 'src/routes.js', 'src/targets/nginx.js', 'src/targets/nextjs.js', 'src/targets/cloudflare.js', 'src/links.js', 'src/lint.js', 'src/guidance.js', 'schema/route.schema.json']) {
     assert.strictEqual(fs.readFileSync(path.join(__dirname, '..', 'plugins/security-sidecar/cli', f), 'utf8'), fs.readFileSync(path.join(__dirname, '..', f), 'utf8'), `${f} out of date; run npm run bundle`);
   }
 });
@@ -358,4 +366,98 @@ test('session-start hook gives the security rules to the agent unless disabled',
   assert.ok(run().includes('SessionStart'), 'a broken config falls back to the default (on)');
   const hooks = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'plugins', 'security-sidecar', 'hooks', 'hooks.json'), 'utf8')).hooks;
   assert.ok(hooks.SessionStart && hooks.PostToolUse, 'both hooks are registered');
+});
+
+test('analyze: source auth signals boost confidence and per-method policies are preserved', () => {
+  const a = analyzeSource({
+    relPath: 'app/reports/route.ts',
+    source: 'export async function GET() { const s = await getServerSession(); return Response.json(s); }',
+  });
+  assert.strictEqual(a.hasAuthSignal, true);
+  assert.strictEqual(a.confidence, 'high');
+  assert.strictEqual(a.needsUserInput, false);
+  assert.strictEqual(a.policy.reason.rule, 'source-auth-signal');
+
+  const multi = analyzeSource({
+    relPath: 'app/blog/route.ts',
+    source: 'export async function GET() {}\nexport async function POST() {}',
+  });
+  assert.strictEqual(multi.confidence, 'high');
+  assert.strictEqual(multi.policy.methods.GET.exposure, 'public');
+  assert.strictEqual(multi.policy.methods.POST.exposure, 'authenticated');
+});
+
+test('check detects intent-code-mismatch and policy-downgrade against git base', () => {
+  const { diffSidecar } = require('../src/check');
+  const root = tmp();
+  put(root, 'app/api/orders/route.ts', "export const dynamic = 'force-static';\nexport function GET(){}");
+  put(root, 'app/api/orders/.route.json', JSON.stringify({
+    version: 1,
+    route: '/api/orders',
+    methods: { GET: { exposure: 'authenticated', cache: { policy: 'no-store' } } },
+  }));
+  put(root, 'app/secret/page.tsx', 'export const metadata = { robots: { index: true } };\nexport default function P(){ return null; }');
+  put(root, 'app/secret/.route.json', JSON.stringify({
+    version: 1,
+    route: '/secret',
+    methods: { GET: { exposure: 'authenticated', indexing: 'noindex' } },
+  }));
+  const drift = check(root).findings.filter((f) => f.type === 'intent-code-mismatch');
+  assert.strictEqual(drift.length, 2);
+
+  const oldDoc = {
+    version: 1,
+    mode: 'enforce',
+    route: '/admin',
+    gate: { type: 'sso' },
+    enforcement: { via: ['ip-allowlist'] },
+    methods: { POST: { exposure: 'internal', rateLimit: { windowMs: 60000, max: 5 } } },
+  };
+  const newDoc = {
+    version: 1,
+    mode: 'annotate',
+    route: '/admin',
+    enforcement: { via: ['app-middleware'] },
+    methods: { POST: { exposure: 'public' } },
+  };
+  const downs = diffSidecar(oldDoc, newDoc, 'app/admin/.route.json');
+  assert.strictEqual(downs.length, 5);
+
+  spawnSync('git', ['init'], { cwd: root });
+  spawnSync('git', ['config', 'user.email', 'test@example.com'], { cwd: root });
+  spawnSync('git', ['config', 'user.name', 'Test'], { cwd: root });
+  put(root, 'app/admin/route.ts', 'export function POST(){}');
+  put(root, 'app/admin/.route.json', JSON.stringify(oldDoc));
+  spawnSync('git', ['add', '.'], { cwd: root });
+  spawnSync('git', ['commit', '-m', 'init'], { cwd: root });
+  put(root, 'app/admin/.route.json', JSON.stringify(newDoc));
+  put(root, 'app/admin/route.ts', '// security-sidecar-ignore: added suppression\nexport function POST(){ eval(x) }');
+  const gitCheck = check(root, { base: 'HEAD' });
+  const gitDowns = gitCheck.findings.filter((f) => f.type === 'policy-downgrade');
+  assert.strictEqual(gitDowns.length, 5);
+  assert.strictEqual(gitCheck.findings.filter((f) => f.type === 'new-suppression').length, 1);
+});
+
+test('lint supports Go, Java, XSS raw HTML sinks, and path traversal', () => {
+  const { lintSource } = require('../src/lint');
+  const rules = (rel, src) => lintSource(rel, src).map((h) => `${h.line}:${h.rule}`);
+  assert.deepStrictEqual(rules('a.tsx', 'return <div dangerouslySetInnerHTML={{ __html: html }} />\nel.innerHTML = raw'), ['1:xss-raw-html', '2:xss-raw-html']);
+  assert.deepStrictEqual(rules('a.ts', 'fs.readFile(`/tmp/${name}`, cb)\nfs.unlinkSync(req.params.file)'), ['1:path-traversal', '2:path-traversal']);
+  assert.deepStrictEqual(rules('a.py', 'open(f"/var/data/{name}")'), ['1:path-traversal']);
+  assert.deepStrictEqual(rules('a.go', 'exec.Command("sh", "-c", input)\nq := fmt.Sprintf("SELECT * FROM users WHERE id = %s", id)\nos.ReadFile(r.URL.Query().Get("f"))'), ['1:exec', '2:sql-string', '3:path-traversal']);
+  assert.deepStrictEqual(rules('a_test.go', 'exec.Command("sh", "-c", input)'), []);
+  assert.deepStrictEqual(rules('A.java', 'Runtime.getRuntime().exec(cmd);\nString q = String.format("SELECT * FROM t WHERE id = %s", id);'), ['1:exec', '2:sql-string']);
+});
+
+test('detects Go and Java routes and gives language-specific guidance', () => {
+  assert.ok(R.isRouteFile('routes/orders.go'));
+  assert.ok(R.isRouteFile('routes/OrdersController.java'));
+  assert.ok(!R.isRouteFile('routes/orders_test.go'));
+  assert.ok(!R.isRouteFile('routes/OrdersTest.java'));
+  const goRes = analyzeSource({ relPath: 'routes/orders.go', source: 'r.Post("/orders", createOrder)' });
+  assert.deepStrictEqual(goRes.methods, ['POST']);
+  assert.ok(goRes.guidance.some((g) => /DisallowUnknownFields/.test(g)));
+  const javaRes = analyzeSource({ relPath: 'routes/Orders.java', source: '@GetMapping("/orders")\n@PostMapping("/orders")' });
+  assert.deepStrictEqual(javaRes.methods, ['GET', 'POST']);
+  assert.ok(javaRes.guidance.some((g) => /FAIL_ON_UNKNOWN_PROPERTIES/.test(g)));
 });

@@ -89,10 +89,10 @@ Practical steps for using security-sidecar. For how it works inside see [ARCHITE
 1. Move the sidecar with the route (`git mv`), and update its `route` field.
 2. A deleted route leaves an `orphan` finding. Delete the sidecar.
 
-### G. Turning on enforcement (optional, Nginx only)
+### G. Turning on enforcement (optional: Nginx, Next.js, Cloudflare)
 1. Classify everything first. `compile` refuses `unclassified` in enforce sidecars.
-2. Set `"mode": "enforce"` and `enforcement.via` (`api-gateway` or `ip-allowlist` for Nginx) on the sidecars you want compiled.
-3. Run `/security-sidecar:compile nginx`. Review `security-sidecar.nginx.conf` before use; where methods differ, the strictest applies to the path.
+2. Set `"mode": "enforce"` and `enforcement.via` (`api-gateway` or `ip-allowlist` for Nginx; `app-middleware` or `api-gateway` for Next.js; `waf`, `ip-allowlist` or `api-gateway` for Cloudflare) on the sidecars you want compiled.
+3. Run `/security-sidecar:compile <nginx|nextjs|cloudflare>`. Review the generated config (`security-sidecar.nginx.conf`, `security-sidecar.nextjs.js`, or `security-sidecar._headers`) before use; where methods differ, the strictest applies to the path.
 4. Add `routes-manifest.json` and the generated config to `.gitignore` and to your deploy exclusions. The manifest lists admin paths.
 
 ## 4. Checking and CI
@@ -102,6 +102,7 @@ Exit codes for `check`: **0** in annotate mode (warnings only), **1** with `--st
 Local or CI (from a checkout; the CLI needs only Node 18+):
 ```bash
 node plugins/security-sidecar/cli/bin/security-sidecar.js check . --strict
+node plugins/security-sidecar/cli/bin/security-sidecar.js check . --strict --base origin/main  # also flag policy downgrades
 node plugins/security-sidecar/cli/bin/security-sidecar.js check . --json   # machine-readable
 ```
 
@@ -131,6 +132,8 @@ Adjust the path to where the CLI lives in your project.
 | `admin-path-exposed` | Remove the link, sitemap or `robots.txt` entry, or approve it as in scenario E |
 | `risky-code` | Replace `eval` with a parser or lookup table, shell calls with an argument-list API, and string-built SQL with parameterized queries. If reviewed and safe, add a `security-sidecar-ignore` comment with the reason |
 | `linkable-not-approved` | Confirm with the owner, then re-save with `reason.source: user`, or remove `linkable` |
+| `intent-code-mismatch` | Remove `force-static` / `revalidate` on `no-store` routes, or align `robots` metadata with the sidecar's `indexing` |
+| `policy-downgrade` | Restore the previous exposure, `gate`, `rateLimit`, `mode` or network restriction, or get explicit review approval |
 
 `save` exits 2 on a schema error, a secret-like value, a sidecar name that is not allowed, or an unapproved `linkable`. Nothing is written in that case.
 

@@ -1,10 +1,10 @@
 ---
 description: Compile enforce-mode sidecars into routes-manifest.json and a target config (opt-in)
-argument-hint: "[nginx]"
+argument-hint: "[nginx|nextjs|cloudflare]"
 allowed-tools: Bash(node:*)
 ---
 
-Compile the sidecars with `mode: enforce`. The target is `$ARGUMENTS`; if empty, ask the user (v1 supports `nginx`).
+Compile the sidecars with `mode: enforce`. The target is `$ARGUMENTS`; if empty, ask the user (supports `nginx`, `nextjs`, `cloudflare`).
 
 Run: `node "${CLAUDE_PLUGIN_ROOT}/cli/bin/security-sidecar.js" compile . --target <target>`
 

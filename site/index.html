@@ -31,6 +31,7 @@ a{color:var(--accent)}
 .btns{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
 .btn{display:inline-block;padding:9px 16px;border-radius:8px;border:1px solid var(--accent);text-decoration:none;font-weight:600}
 .btn.primary{background:var(--accent);color:var(--bg)}
+.btn.coffee{background:#ffdd00;border-color:#ffdd00;color:#000}
 footer{margin-top:48px;color:var(--muted);font-size:.9rem}
 </style>
 </head>
@@ -44,6 +45,7 @@ footer{margin-top:48px;color:var(--muted);font-size:.9rem}
     <div class="btns">
       <a class="btn primary" href="https://github.com/zafrem/security-sidecar">View on GitHub</a>
       <a class="btn" href="https://github.com/zafrem/security-sidecar/blob/main/docs/PLAYBOOK.md">Playbook</a>
+      <a class="btn coffee" href="https://buymeacoffee.com/zafrem">Buy me a coffee</a>
     </div>
   </div>
 </header>
@@ -55,7 +57,7 @@ footer{margin-top:48px;color:var(--muted);font-size:.9rem}
   <div class="card"><h3>Public or secured</h3><p>When a route file is added, it is classified. Clear cases are saved silently; unsure ones ask you, and the default is secured.</p></div>
   <div class="card"><h3>Implementation guidance</h3><p>Framework-specific steps: session checks inside the handler, ownership, rate limits, CSRF, caching and indexing.</p></div>
   <div class="card"><h3>Admin page protection</h3><p>An extra gate (SSO, MFA or a passphrase of 8+ characters), a network restriction, and no links, sitemap or robots.txt entries unless you approve.</p></div>
-  <div class="card"><h3>Risky-code lint</h3><p>Flags <code>eval</code>, shell execution and string-built SQL. Suppressions are listed for review.</p></div>
+  <div class="card"><h3>Risky-code lint</h3><p>Flags <code>eval</code>, shell execution, string-built SQL, raw HTML sinks and path traversal across JS/TS, Python, Go and Java. Suppressions are listed for review.</p></div>
   <div class="card"><h3>Secure-coding rules</h3><p>14 language-neutral rules with TypeScript, Python, Go and Java notes, reminded at every session start.</p></div>
   <div class="card"><h3>Any code assistant</h3><p>The same rules are generated for <code>AGENTS.md</code>, Cursor and Gemini.</p></div>
 </div>
@@ -89,7 +91,7 @@ footer{margin-top:48px;color:var(--muted);font-size:.9rem}
 
 <h2>Good to know</h2>
 <ul>
-  <li>Enforcement output is Nginx only. Next.js is the tested framework; Express and FastAPI are detected by file path.</li>
+  <li>Enforcement output supports Nginx, Next.js and Cloudflare. Next.js is the tested framework; Express, FastAPI, Go and Java routes are detected by file path.</li>
   <li>Link and lint checks are line-based text matching, so expect misses and some false positives.</li>
   <li><code>reason.source: user</code> is a convention an agent could forge, so review sidecar changes in pull requests.</li>
   <li>Turn the session reminder off with <code>"guidelines": false</code>.</li>

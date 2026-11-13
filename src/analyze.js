@@ -12,8 +12,13 @@ const PUBLIC_SEGMENTS = ['products', 'product', 'blog', 'posts', 'post', 'docs',
 
 const segs = (route) => route.split('/').filter(Boolean).map((s) => s.toLowerCase());
 const has = (list, s) => s.some((x) => list.includes(x));
+const AUTH_SIGNAL_RE = /\b(?:getServerSession|getSession|currentUser|requireAuth|ensureAuthenticated|verifyToken|authenticate)\s*\(|\b(?:req|ctx|request)\.user\b|\bDepends\s*\(\s*(?:get_current_user|require_auth|verify_token)\b|@(?:login_required|jwt_required|permission_required)\b|\bawait\s+auth\s*\(/;
 
-function classifyMethod(route, method, adminPaths = []) {
+function hasAuthSignal(source = '') {
+  return AUTH_SIGNAL_RE.test(source);
+}
+
+function classifyMethod(route, method, adminPaths = [], authSignal = false) {
   const s = segs(route);
   const isApi = s[0] === 'api' || s.includes('api');
   if (has(INTERNAL_SEGMENTS, s)) {
@@ -29,6 +34,11 @@ function classifyMethod(route, method, adminPaths = []) {
     return p;
   }
   if (MUTATING.has(method)) return { exposure: 'authenticated', cache: { policy: 'no-store' }, confidence: 'high', rule: 'method-mutating' };
+  if (authSignal) {
+    const p = { exposure: 'authenticated', cache: { policy: 'no-store' }, confidence: 'high', rule: 'source-auth-signal' };
+    if (!isApi) p.indexing = 'noindex';
+    return p;
+  }
   if (s.length === 0 || has(PUBLIC_SEGMENTS, s)) {
     return { exposure: 'public', ...(isApi ? {} : { indexing: 'index' }), confidence: 'high', rule: s.length === 0 ? 'path-root' : 'path-public-content' };
   }
@@ -41,13 +51,16 @@ function analyzeSource({ relPath, source = '', methods, adminPaths = [] }) {
   const route = R.routeFromPath(relPath);
   const detected = methods && methods.length ? methods : R.detectMethods(source, relPath);
   const ms = detected.length ? detected : ['*'];
-  const per = Object.fromEntries(ms.map((m) => [m, classifyMethod(route, m === '*' ? 'GET' : m, adminPaths)]));
+  const authSignal = hasAuthSignal(source);
+  const per = Object.fromEntries(ms.map((m) => [m, classifyMethod(route, m === '*' ? 'GET' : m, adminPaths, authSignal)]));
 
-  // One suggestion for the whole file: the most restrictive method wins.
+  // Summary suggestion takes the most restrictive method; per-method policies are preserved in policy.methods.
   const strongest = Object.values(per).sort((a, b) => RANK[b.exposure] - RANK[a.exposure])[0];
   const confidence = Object.values(per).every((p) => p.confidence === 'high') ? 'high' : 'low';
   const { confidence: _c, rule, ...suggestion } = strongest;
 
+  const stripMeta = ({ confidence: _mc, rule: _mr, ...mp }) => mp;
+  const perMethodPolicy = Object.fromEntries(ms.map((m) => [m, stripMeta(per[m])]));
   const policyFor = (exposure) => ({
     route,
     methods: Object.fromEntries(ms.map((m) => [m, exposure === 'unclassified' ? { exposure } : { ...suggestion, exposure }])),
@@ -62,7 +75,8 @@ function analyzeSource({ relPath, source = '', methods, adminPaths = [] }) {
   }
   return {
     route, methods: ms, suggestion, confidence, needsUserInput: confidence === 'low', options,
-    policy: { ...policyFor(suggestion.exposure), reason: { source: 'heuristic', rule: reasonRule } },
+    hasAuthSignal: authSignal,
+    policy: { route, methods: confidence === 'high' ? perMethodPolicy : policyFor(suggestion.exposure).methods, reason: { source: 'heuristic', rule: reasonRule } },
     isAdmin,
     guidance: guidance({ exposure: suggestion.exposure, relPath, isAdmin, route }),
     ...(isAdmin ? {
@@ -96,4 +110,4 @@ function analyze(file, { root = process.cwd(), methods } = {}) {
   return out;
 }
 
-module.exports = { analyze, analyzeSource, classifyMethod };
+module.exports = { analyze, analyzeSource, classifyMethod, hasAuthSignal };

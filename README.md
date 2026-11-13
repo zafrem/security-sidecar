@@ -1,5 +1,7 @@
 # security-sidecar
 
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/zafrem)
+
 Records the protection intent of each web route in a `.route.json` sidecar file next to the code, whenever an AI coding agent creates or changes a route.
 
 > **Annotation is not protection.** By default (`mode: annotate`) this tool only records intent. It blocks nothing, and `check` only warns. A route with a sidecar is not thereby protected.
@@ -11,10 +13,10 @@ Records the protection intent of each web route in a `.route.json` sidecar file 
 3. Asks you only when the suggestion is uncertain.
 4. Saves a `.route.json` sidecar, validated against a schema.
 5. Refuses to save secrets (keys, tokens, connection strings).
-6. `check` reports missing, orphan, invalid and unclassified sidecars.
+6. `check` reports missing, orphan, invalid and unclassified sidecars, intent-vs-code drift (`intent-code-mismatch`), and security downgrades (`--base <git-ref>`).
 7. `adminPaths` setting for renamed admin pages.
 8. Warns when an admin or internal route has no network restriction.
-9. Optional `compile` to `routes-manifest.json` and an nginx config.
+9. Optional `compile` to `routes-manifest.json` and an `nginx`, `nextjs` or `cloudflare` config.
 10. Claude Code plugin with a hook, a skill and two slash commands.
 
 ## Security features
@@ -29,7 +31,7 @@ Records the protection intent of each web route in a `.route.json` sidecar file 
 8) Safe sidecars: schema validation, no unknown fields, warning for sidecars in `public/` or `static/`, and a warning that `routes-manifest.json` lists admin paths.
 9) Your edits are kept: `save` never overwrites your notes, your chosen values or your `gate` and `linkable` settings.
 10) Common secure-coding guidelines: 14 language-neutral rules (strict input validation, no free types, value constraints, ownership checks, no input-built queries or commands, safe secrets, crypto and errors) with notes for TypeScript, Python, Go and Java. One source in `guidelines/` is generated for Claude Code (skill), `AGENTS.md` (Codex and others), Cursor and Gemini. In Claude Code a session-start hook also gives the agent a short reminder of the rules for all code it writes (turn off with `"guidelines": false`). Guidance only; nothing is enforced. See [adapters/](adapters/README.md).
-11) Risky-code lint: `check` and the edit hook flag `eval`, `exec` / shell calls and string-built SQL in JavaScript, TypeScript and Python, with file and line. Reviewed lines can be marked `security-sidecar-ignore`; `check` still lists those for review.
+11) Risky-code lint: `check` and the edit hook flag `eval`, `exec` / shell calls, string-built SQL, and raw HTML sinks (`dangerouslySetInnerHTML` / `innerHTML`) across JavaScript, TypeScript, Python, Go and Java, with file and line. Reviewed lines can be marked `security-sidecar-ignore`; `check` still lists those for review.
 12) Honest defaults: annotate mode records intent only and blocks nothing, and `check` says so.
 
 ## Install (Claude Code)

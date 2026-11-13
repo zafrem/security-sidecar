@@ -40,7 +40,7 @@ function main(argv) {
         return code;
       }
       case 'check': {
-        const r = require('./check').check(rest[0] || process.cwd(), { strict: !!flags.strict });
+        const r = require('./check').check(rest[0] || process.cwd(), { strict: !!flags.strict, base: flags.base });
         if (flags.json) out(r); else process.stdout.write(require('./check').format(r) + '\n');
         return r.exitCode;
       }

@@ -54,9 +54,11 @@ All logic lives in one dependency-free Node CLI plus one JSON schema. The Claude
 | `save.js` | Merge with existing sidecar, validate, secret scan, canonical key order, write |
 | `check.js` | Repo-wide findings and exit code |
 | `links.js` | Finds references to protected routes in other files |
-| `lint.js` | Line-based lint for `eval`, exec / shell and string-built SQL, with a `security-sidecar-ignore` suppression |
+| `lint.js` | Line-based lint for `eval`, exec / shell, string-built SQL, and raw HTML sinks across JS/TS/Py/Go/Java, with a `security-sidecar-ignore` suppression |
 | `compile.js` | Collects `mode: enforce` sidecars into the manifest and calls a target |
 | `targets/nginx.js` | Renders the Nginx config |
+| `targets/nextjs.js` | Renders Next.js `headers()` and `routePolicies` module |
+| `targets/cloudflare.js` | Renders Cloudflare `_headers` and WAF rule expressions |
 | `cli.js` | Argument parsing and JSON output for the four subcommands |
 
 ## 4. Data model

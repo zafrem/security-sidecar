@@ -1,23 +1,98 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const { spawnSync } = require('child_process');
 const R = require('./routes');
 const { protectedRoutes, scanFile } = require('./links');
 const { lintFile } = require('./lint');
 const { validate } = require('./validate');
 
 const NETWORK_RESTRICTIONS = ['ip-allowlist', 'mtls'];
+const EXPOSURE_RANK = { unclassified: 0, public: 1, authenticated: 2, internal: 3 };
 
-function check(root = process.cwd(), { strict = false } = {}) {
+function checkIntentCodeDrift(root, sidecarRel, doc, routeFiles = []) {
+  const out = [];
+  const methods = Object.values(doc.methods || {});
+  const wantsNoStore = methods.some((m) => m.cache && m.cache.policy === 'no-store');
+  const wantsNoIndex = methods.some((m) => m.indexing === 'noindex');
+  const wantsIndex = methods.length > 0 && methods.every((m) => m.indexing === 'index');
+
+  for (const rf of routeFiles) {
+    let src = '';
+    try { src = fs.readFileSync(path.join(root, rf), 'utf8'); } catch { continue; }
+    if (wantsNoStore) {
+      if (/\bexport\s+const\s+dynamic\s*=\s*['"]force-static['"]/.test(src)
+          || /\bexport\s+const\s+revalidate\s*=\s*[1-9]\d*/.test(src)) {
+        out.push({
+          type: 'intent-code-mismatch',
+          file: sidecarRel,
+          message: `${rf} enables static caching (force-static / revalidate > 0) while sidecar requires cache.policy "no-store"`,
+        });
+      }
+    }
+    if (wantsNoIndex && /\brobots\s*:\s*(?:\{[^}]*\bindex\s*:\s*true\b|['"]index['"])/.test(src)) {
+      out.push({
+        type: 'intent-code-mismatch',
+        file: sidecarRel,
+        message: `${rf} sets robots index:true while sidecar requires indexing "noindex"`,
+      });
+    }
+    if (wantsIndex && /\brobots\s*:\s*(?:\{[^}]*\bindex\s*:\s*false\b|['"]noindex['"])/.test(src)) {
+      out.push({
+        type: 'intent-code-mismatch',
+        file: sidecarRel,
+        message: `${rf} sets robots noindex while sidecar requires indexing "index"`,
+      });
+    }
+  }
+  return out;
+}
+
+function diffSidecar(oldDoc, newDoc, rel) {
+  const out = [];
+  if (!oldDoc || !newDoc || !oldDoc.methods || !newDoc.methods) return out;
+  if (oldDoc.mode === 'enforce' && (newDoc.mode || 'annotate') !== 'enforce') {
+    out.push({ type: 'policy-downgrade', file: rel, message: 'mode downgraded from "enforce" to "annotate"' });
+  }
+  if (oldDoc.gate && !newDoc.gate) {
+    out.push({ type: 'policy-downgrade', file: rel, message: `gate (${oldDoc.gate.type}) was removed` });
+  }
+  const oldVia = (oldDoc.enforcement && oldDoc.enforcement.via) || [];
+  const newVia = (newDoc.enforcement && newDoc.enforcement.via) || [];
+  for (const nr of NETWORK_RESTRICTIONS) {
+    if (oldVia.includes(nr) && !newVia.includes(nr)) {
+      out.push({ type: 'policy-downgrade', file: rel, message: `network restriction "${nr}" was removed from enforcement.via` });
+    }
+  }
+  for (const [m, oldP] of Object.entries(oldDoc.methods)) {
+    const newP = newDoc.methods[m] || newDoc.methods['*'];
+    if (!newP) continue;
+    if (EXPOSURE_RANK[newP.exposure] < EXPOSURE_RANK[oldP.exposure]) {
+      out.push({ type: 'policy-downgrade', file: rel, message: `${m} exposure downgraded from "${oldP.exposure}" to "${newP.exposure}"` });
+    }
+    if (oldP.rateLimit && !newP.rateLimit) {
+      out.push({ type: 'policy-downgrade', file: rel, message: `${m} rateLimit was removed` });
+    }
+  }
+  return out;
+}
+
+function check(root = process.cwd(), { strict = false, base } = {}) {
   const config = R.loadConfig(root);
   const findings = [];
   const allFiles = [];
   const expected = new Set();   // sidecars that should exist
+  const routeFilesBySidecar = new Map();
   const existing = [];          // sidecars on disk
 
   R.walk(root, (rel) => {
     allFiles.push(rel);
-    if (R.isRouteFile(rel, config)) expected.add(R.sidecarPathFor(rel));
+    if (R.isRouteFile(rel, config)) {
+      const sc = R.sidecarPathFor(rel);
+      expected.add(sc);
+      if (!routeFilesBySidecar.has(sc)) routeFilesBySidecar.set(sc, []);
+      routeFilesBySidecar.get(sc).push(rel);
+    }
     if (/(^|\/)(?:[A-Za-z0-9_-]+)?\.route\.json$/.test(rel)) existing.push(rel);
   });
 
@@ -46,6 +121,13 @@ function check(root = process.cwd(), { strict = false } = {}) {
       findings.push({ type: 'admin-no-gate', file: rel, message: `${doc.route} is an admin route with no extra gate recorded (passphrase of 8+ characters, SSO or MFA); a login alone is one factor` });
     }
     if (!expected.has(rel)) findings.push({ type: 'orphan', file: rel, message: 'no matching route source (deleted or renamed?)' });
+    else findings.push(...checkIntentCodeDrift(root, rel, doc, routeFilesBySidecar.get(rel)));
+    if (base && /^[A-Za-z0-9_./~^-]+$/.test(base)) {
+      const g = spawnSync('git', ['show', `${base}:${rel}`], { cwd: root, encoding: 'utf8' });
+      if (g.status === 0 && g.stdout) {
+        try { findings.push(...diffSidecar(JSON.parse(g.stdout), doc, rel)); } catch { /* ignore invalid base json */ }
+      }
+    }
   }
   for (const rel of [...expected].sort()) {
     if (!existing.includes(rel)) findings.push({ type: 'missing', file: rel, message: 'route has no sidecar' });
@@ -57,6 +139,27 @@ function check(root = process.cwd(), { strict = false } = {}) {
   const suppressed = [];
   for (const rel of allFiles) {
     for (const h of lintFile(root, rel, { includeSuppressed: true })) (h.suppressed ? suppressed : findings).push(h);
+  }
+  if (base && /^[A-Za-z0-9_./~^-]+$/.test(base) && suppressed.length) {
+    const byFile = new Map();
+    for (const s of suppressed) {
+      if (!byFile.has(s.file)) byFile.set(s.file, []);
+      byFile.get(s.file).push(s);
+    }
+    const { lintSource } = require('./lint');
+    for (const [rel, curList] of byFile.entries()) {
+      const g = spawnSync('git', ['show', `${base}:${rel}`], { cwd: root, encoding: 'utf8' });
+      const oldSup = g.status === 0 && g.stdout
+        ? lintSource(rel, g.stdout, { includeSuppressed: true }).filter((x) => x.suppressed)
+        : [];
+      if (curList.length > oldSup.length) {
+        findings.push({
+          type: 'new-suppression',
+          file: rel,
+          message: `${curList.length - oldSup.length} new security-sidecar-ignore suppression(s) added since ${base}; review each one`,
+        });
+      }
+    }
   }
 
   const enforcing = (f) => docs.get(f.file)?.mode === 'enforce';
@@ -80,4 +183,4 @@ function format(r) {
   return [head, ...lines].join('\n') + tail;
 }
 
-module.exports = { check, format };
+module.exports = { check, format, diffSidecar };

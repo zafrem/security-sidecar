@@ -4,8 +4,10 @@ const path = require('path');
 const R = require('./routes');
 const { validate } = require('./validate');
 const nginx = require('./targets/nginx');
+const nextjs = require('./targets/nextjs');
+const cloudflare = require('./targets/cloudflare');
 
-const TARGETS = { nginx };
+const TARGETS = { nginx, nextjs, cloudflare };
 
 function compile(root, target) {
   const t = TARGETS[target];

@@ -3,6 +3,8 @@
 
 function frameworkOf(relPath) {
   if (/\.py$/.test(relPath)) return 'fastapi';
+  if (/\.go$/.test(relPath)) return 'go';
+  if (/\.java$/.test(relPath)) return 'java';
   if (/(^|\/)(app|pages)\//.test(relPath)) return 'nextjs';
   return 'express';
 }
@@ -11,17 +13,23 @@ const AUTH = {
   nextjs: 'Check the session inside the handler or server component (not only in middleware) and return 401/403 when it is missing.',
   fastapi: 'Add a dependency such as `Depends(get_current_user)` to the route and raise HTTPException(401/403) when it fails.',
   express: 'Mount an auth middleware on this router (for example `router.use(requireAuth)`) and respond 401/403 when it fails.',
+  go: 'Verify the caller identity from context/middleware inside the handler and return `http.StatusUnauthorized` / `http.StatusForbidden` when missing.',
+  java: 'Require authentication via Spring Security (`@PreAuthorize` / SecurityFilterChain) and verify caller identity before acting.',
 };
 const CACHE = {
   nextjs: 'Prefer static generation or `revalidate` so the page is served from cache; export `metadata` (title, description, canonical).',
   fastapi: 'Send `Cache-Control: public, max-age=...` and render server-side HTML so crawlers see the content.',
   express: 'Send `Cache-Control: public, max-age=...` and render server-side HTML so crawlers see the content.',
+  go: 'Send `Cache-Control: public, max-age=...` on public responses.',
+  java: 'Send `Cache-Control: public, max-age=...` on public responses.',
 };
 
 const INPUT = {
   nextjs: 'Parse params, query, body and headers with a strict schema (for example zod `.strict()`) before use. Type inputs as `unknown` and narrow them; never `any`.',
   express: 'Parse params, query, body and headers with a strict schema (for example zod `.strict()`) before use. Type inputs as `unknown` and narrow them; never `any`.',
   fastapi: 'Declare inputs as pydantic models or typed parameters with `Field(...)` constraints and `extra="forbid"`; never `Any` or a bare `dict`.',
+  go: 'Decode into a typed struct with `DisallowUnknownFields()`, limit body size with `http.MaxBytesReader`, and never use `map[string]any` for input.',
+  java: 'Deserialize into a typed record/DTO with `@Valid` Bean Validation (`@NotNull`, `@Size`, `@Pattern`) and `FAIL_ON_UNKNOWN_PROPERTIES`; never `Map<String, Object>`.',
 };
 
 // Secure-coding checklist for code that receives external input (see skills/secure-functions).
